@@ -1,0 +1,79 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const cookieParser = require('cookie-parser');
+const connectDB = require('./config/db');
+const { apiLimiter } = require('./middleware/rateLimiter');
+
+// Route imports
+const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
+const studentRoutes = require('./routes/student');
+
+const app = express();
+
+// ── Connect Database ────────────────────────────────────────────────────────
+connectDB();
+
+// ── Security Middleware ─────────────────────────────────────────────────────
+app.use(helmet());
+app.use(cors({
+    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// ── General Middleware ──────────────────────────────────────────────────────
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+if (process.env.NODE_ENV !== 'production') {
+    app.use(morgan('dev'));
+}
+
+// ── Rate Limiting ───────────────────────────────────────────────────────────
+app.use('/api/', apiLimiter);
+
+// ── Routes ──────────────────────────────────────────────────────────────────
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/student', studentRoutes);
+
+// ── Health Check ─────────────────────────────────────────────────────────────
+app.get('/api/health', (req, res) => {
+    res.json({ success: true, message: 'SmartMCQ Pro API is running', timestamp: new Date().toISOString() });
+});
+
+// ── 404 Handler ───────────────────────────────────────────────────────────────
+app.use('*', (req, res) => {
+    res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found` });
+});
+
+// ── Global Error Handler ──────────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+    console.error('Unhandled Error:', err);
+
+    if (err.message === 'Only .xlsx files are allowed') {
+        return res.status(400).json({ success: false, message: err.message });
+    }
+
+    if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ success: false, message: 'File size cannot exceed 5MB' });
+    }
+
+    res.status(err.status || 500).json({
+        success: false,
+        message: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message,
+    });
+});
+
+// ── Start Server ──────────────────────────────────────────────────────────────
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+    console.log(`🚀 SmartMCQ Pro API server running on port ${PORT}`);
+    console.log(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
+});
