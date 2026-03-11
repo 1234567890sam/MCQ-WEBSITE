@@ -7,7 +7,7 @@ import { Clock, PlayCircle, ChevronLeft, ChevronRight, Send, AlertTriangle } fro
 export default function ExamPage() {
     const navigate = useNavigate();
     const [subjects, setSubjects] = useState([]);
-    const [config, setConfig] = useState({ subject: 'All', difficulty: 'All', count: 20, duration: 30, negativeMarking: false });
+    const [config, setConfig] = useState({ subject: 'All', difficulty: 'All', count: 70, duration: 30, negativeMarking: false });
     const [questions, setQuestions] = useState([]);
     const [answers, setAnswers] = useState({});
     const [current, setCurrent] = useState(0);
@@ -123,9 +123,11 @@ export default function ExamPage() {
 
                     <div>
                         <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                            Questions: <span style={{ color: '#6366f1' }}>{config.count}</span>
+                            Number of Questions: <span style={{ color: '#6366f1' }}>70</span>
                         </label>
-                        <input type="range" min={10} max={100} step={10} value={config.count} onChange={(e) => setConfig({ ...config, count: parseInt(e.target.value) })} style={{ width: '100%', accentColor: '#6366f1' }} />
+                        <div style={{ padding: '0.75rem', borderRadius: '0.75rem', background: 'rgba(99,102,241,0.05)', border: '1px dashed #6366f1', fontSize: '0.85rem', color: '#64748b' }}>
+                            Standard exam format: 70 random questions based on your selection.
+                        </div>
                     </div>
 
                     <div>

@@ -7,7 +7,7 @@ import { BookOpen, Filter, Hash, PlayCircle, CheckCircle2, XCircle, Bookmark, Bo
 export default function PracticePage() {
     const navigate = useNavigate();
     const [subjects, setSubjects] = useState([]);
-    const [config, setConfig] = useState({ subject: 'All', difficulty: 'All', count: 10 });
+    const [config, setConfig] = useState({ subject: 'All', difficulty: 'All', count: 20 });
     const [questions, setQuestions] = useState([]);
     const [current, setCurrent] = useState(0);
     const [answers, setAnswers] = useState({});
@@ -120,11 +120,30 @@ export default function PracticePage() {
                         <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                             Number of Questions: <span style={{ color: '#6366f1' }}>{config.count}</span>
                         </label>
-                        <input type="range" min={5} max={50} step={5} value={config.count}
-                            onChange={(e) => setConfig({ ...config, count: parseInt(e.target.value) })}
-                            style={{ width: '100%', accentColor: '#6366f1' }} />
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8' }}>
-                            <span>5</span><span>50</span>
+                        {/* Quick picks */}
+                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                            {[10, 20, 30, 50, 100, 200].map((n) => (
+                                <button key={n} onClick={() => setConfig({ ...config, count: n })}
+                                    style={{ padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: `2px solid ${config.count === n ? '#6366f1' : 'var(--border-light)'}`, background: config.count === n ? 'rgba(99,102,241,0.1)' : 'transparent', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', color: config.count === n ? '#6366f1' : 'inherit' }}>
+                                    {n}
+                                </button>
+                            ))}
+                        </div>
+                        {/* Custom number */}
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <input
+                                type="number"
+                                className="input"
+                                min={1}
+                                max={1000}
+                                value={config.count}
+                                onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    if (!isNaN(val) && val >= 1) setConfig({ ...config, count: Math.min(val, 1000) });
+                                }}
+                                style={{ maxWidth: '120px' }}
+                            />
+                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>questions (max 1000)</span>
                         </div>
                     </div>
 
