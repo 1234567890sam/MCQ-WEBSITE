@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
-import { Search, Shield, UserCheck, UserX, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Shield, UserCheck, UserX, ChevronLeft, ChevronRight, BarChart2, X } from 'lucide-react';
 
 export default function ManageUsers() {
     const [users, setUsers] = useState([]);
     const [search, setSearch] = useState('');
     const [pagination, setPagination] = useState({ page: 1, total: 0, pages: 1 });
     const [loading, setLoading] = useState(true);
+    const [analyticsData, setAnalyticsData] = useState(null);
+    const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
     const fetchUsers = async (page = 1) => {
         setLoading(true);
@@ -38,6 +40,19 @@ export default function ManageUsers() {
             toast.success('Status updated');
             fetchUsers(pagination.page);
         } catch { toast.error('Failed to update status'); }
+    };
+
+    const viewAnalytics = async (user) => {
+        if (user.role === 'admin') {
+            toast.error('Analytics only valid for students');
+            return;
+        }
+        setAnalyticsLoading(true);
+        try {
+            const { data } = await api.get(`/admin/users/${user._id}/analytics`);
+            setAnalyticsData(data.analytics);
+        } catch { toast.error('Failed to load analytics'); }
+        setAnalyticsLoading(false);
     };
 
     return (
@@ -94,6 +109,9 @@ export default function ManageUsers() {
                                             <button onClick={() => toggleActive(u)} title="Toggle active" style={{ background: u.isActive ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)', color: u.isActive ? '#ef4444' : '#10b981', border: 'none', padding: '0.35rem', borderRadius: '0.4rem', cursor: 'pointer' }}>
                                                 {u.isActive ? <UserX size={14} /> : <UserCheck size={14} />}
                                             </button>
+                                            <button onClick={() => viewAnalytics(u)} title="View Analytics" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1', border: 'none', padding: '0.35rem', borderRadius: '0.4rem', cursor: 'pointer' }}>
+                                                <BarChart2 size={14} />
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -109,6 +127,58 @@ export default function ManageUsers() {
                     <button className="btn-secondary" onClick={() => fetchUsers(pagination.page - 1)} disabled={pagination.page === 1} style={{ padding: '0.5rem', opacity: pagination.page === 1 ? 0.4 : 1 }}><ChevronLeft size={16} /></button>
                     <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Page {pagination.page} of {pagination.pages}</span>
                     <button className="btn-secondary" onClick={() => fetchUsers(pagination.page + 1)} disabled={pagination.page === pagination.pages} style={{ padding: '0.5rem', opacity: pagination.page === pagination.pages ? 0.4 : 1 }}><ChevronRight size={16} /></button>
+                </div>
+            )}
+
+            {analyticsData && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setAnalyticsData(null)}>
+                    <div style={{ background: 'white', borderRadius: '1rem', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflow: 'auto', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b' }}>Analytics: {analyticsData.student.name}</h2>
+                            <button onClick={() => setAnalyticsData(null)} style={{ background: 'rgba(241, 245, 249, 1)', border: 'none', cursor: 'pointer', padding: '0.5rem', borderRadius: '50%', display: 'flex' }}><X size={16} color="#64748b" /></button>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                            <div className="card" style={{ padding: '1.25rem' }}>
+                                <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.3rem' }}>Total Attempts</div>
+                                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#6366f1' }}>{analyticsData.totalAttempts}</div>
+                            </div>
+                            <div className="card" style={{ padding: '1.25rem' }}>
+                                <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.3rem' }}>Avg Score</div>
+                                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#10b981' }}>{analyticsData.avgScore}%</div>
+                            </div>
+                            <div className="card" style={{ padding: '1.25rem' }}>
+                                <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.3rem' }}>Strongest Subject</div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#10b981' }}>{analyticsData.strongSubject}</div>
+                            </div>
+                            <div className="card" style={{ padding: '1.25rem' }}>
+                                <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.3rem' }}>Weakest Subject</div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#ef4444' }}>{analyticsData.weakSubject}</div>
+                            </div>
+                        </div>
+
+                        <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1rem', color: '#1e293b' }}>Recent Attempts</h3>
+                        <div className="table-container">
+                            <table style={{ fontSize: '0.85rem' }}>
+                                <thead>
+                                    <tr><th>Date</th><th>Subject</th><th>Score</th><th>Accuracy</th></tr>
+                                </thead>
+                                <tbody>
+                                    {analyticsData.attemptHistory.map(a => (
+                                        <tr key={a._id}>
+                                            <td style={{ color: '#64748b' }}>{new Date(a.date).toLocaleDateString()}</td>
+                                            <td><span className="badge" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>{a.subject}</span></td>
+                                            <td style={{ fontWeight: 600 }}>{a.score}/{a.maxScore}</td>
+                                            <td style={{ fontWeight: 700, color: a.accuracy >= 70 ? '#10b981' : a.accuracy >= 40 ? '#f59e0b' : '#ef4444' }}>{a.accuracy}%</td>
+                                        </tr>
+                                    ))}
+                                    {analyticsData.attemptHistory.length === 0 && (
+                                        <tr><td colSpan={4} style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8' }}>No attempts found</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

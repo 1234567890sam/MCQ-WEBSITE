@@ -5,16 +5,25 @@ const {
     getPracticeQuestions, submitExam, getAttemptHistory, getAttemptById,
     getDashboardStats, addBookmark, removeBookmark, getBookmarks,
     getLeaderboard, downloadResultPDF, getWrongQuestions, updateProfile,
+    joinExamByCode, getSessionQuestions, submitSessionExam, getSessionResult,
+    getMySessionResults,
 } = require('../controllers/studentController');
 const { getSubjects } = require('../controllers/adminController');
 
 // All student routes require authentication
 router.use(verifyToken, requireStudent);
 
-// Practice & Exam
+// Practice & Exam (regular)
 router.get('/practice', getPracticeQuestions);
 router.post('/submit-exam', submitExam);
 router.get('/subjects', getSubjects);
+
+// Session Exam (university exam mode)
+router.post('/join-exam', joinExamByCode);
+router.get('/my-results', getMySessionResults);
+router.get('/session-exam/:code/questions', getSessionQuestions);
+router.post('/session-exam/:code/submit', submitSessionExam);
+router.get('/session-exam/:code/result', getSessionResult);
 
 // Attempts
 router.get('/attempts', getAttemptHistory);

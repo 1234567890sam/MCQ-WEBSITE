@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/axios';
-import { Users, BookOpen, Target, TrendingUp, AlertTriangle, BarChart3 } from 'lucide-react';
+import { Users, BookOpen, Target, TrendingUp, AlertTriangle, BarChart3, Layers } from 'lucide-react';
 
 export default function AdminDashboard() {
     const [stats, setStats] = useState(null);
@@ -14,9 +14,10 @@ export default function AdminDashboard() {
 
     const cards = [
         { label: 'Total Students', value: stats?.totalUsers ?? 0, icon: Users, color: '#6366f1', bg: 'rgba(99,102,241,0.1)' },
+        { label: 'Total Subjects', value: stats?.totalSubjects ?? 0, icon: Layers, color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
         { label: 'Total Questions', value: stats?.totalQuestions ?? 0, icon: BookOpen, color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
         { label: 'Total Attempts', value: stats?.totalAttempts ?? 0, icon: Target, color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
-        { label: 'Avg Accuracy', value: `${stats?.avgAccuracy ?? 0}%`, icon: TrendingUp, color: '#06b6d4', bg: 'rgba(6,182,212,0.1)' },
+        { label: 'Avg Score', value: `${stats?.avgAccuracy ?? 0}%`, icon: TrendingUp, color: '#06b6d4', bg: 'rgba(6,182,212,0.1)' },
     ];
 
     return (
@@ -44,41 +45,45 @@ export default function AdminDashboard() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '1.5rem' }}>
-                {/* Most Attempted Subjects */}
-                {stats?.subjectStats?.length > 0 && (
+                
+                {/* Highlights */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    {stats?.mostAttemptedSubject && (
+                        <div className="card">
+                            <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <BarChart3 size={18} color="#6366f1" /> Most Attempted Subject
+                            </div>
+                            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b' }}>{stats.mostAttemptedSubject._id || 'Unknown'}</div>
+                            <div style={{ fontSize: '0.85rem', color: '#64748b' }}>{stats.mostAttemptedSubject.count} total attempts</div>
+                        </div>
+                    )}
+
+                    {stats?.hardestSubject && (
+                        <div className="card">
+                            <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <AlertTriangle size={18} color="#ef4444" /> Hardest Subject
+                            </div>
+                            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b' }}>{stats.hardestSubject._id || 'Unknown'}</div>
+                            <div style={{ fontSize: '0.85rem', color: '#64748b' }}>{stats.hardestSubject.correctRate?.toFixed(1) || 0}% Correct Answer Rate</div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Subject Distribution (Total questions grouped by subject) */}
+                {stats?.subjectDistribution?.length > 0 && (
                     <div className="card">
                         <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <BarChart3 size={18} color="#6366f1" /> Most Attempted Subjects
+                            <BookOpen size={18} color="#10b981" /> Total Questions by Subject
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            {stats.subjectStats.map((s, i) => (
+                            {stats.subjectDistribution.sort((a,b) => b.count - a.count).map((s, i) => (
                                 <div key={s._id}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem', fontSize: '0.85rem' }}>
                                         <span style={{ fontWeight: 600 }}>{s._id || 'Unknown'}</span>
-                                        <span style={{ color: '#64748b' }}>{s.count} attempts</span>
+                                        <span style={{ color: '#64748b' }}>{s.count} questions</span>
                                     </div>
                                     <div style={{ height: 6, background: 'var(--border-light)', borderRadius: 9999 }}>
-                                        <div style={{ height: '100%', borderRadius: 9999, background: `hsl(${240 - i * 30}, 75%, 60%)`, width: `${Math.min(100, (s.count / (stats.subjectStats[0]?.count || 1)) * 100)}%`, transition: 'width 0.5s ease' }} />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Hardest Questions */}
-                {stats?.hardestQuestions?.length > 0 && (
-                    <div className="card">
-                        <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <AlertTriangle size={18} color="#ef4444" /> Hardest Questions
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            {stats.hardestQuestions.map((q) => (
-                                <div key={q._id} style={{ padding: '0.75rem', background: 'rgba(239,68,68,0.05)', borderRadius: '0.75rem', border: '1px solid rgba(239,68,68,0.15)' }}>
-                                    <p style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.3rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.question}</p>
-                                    <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem', color: '#64748b' }}>
-                                        <span>Subject: {q.subject}</span>
-                                        <span style={{ color: '#ef4444', fontWeight: 700 }}>Wrong rate: {q.wrongRate}%</span>
+                                        <div style={{ height: '100%', borderRadius: 9999, background: `hsl(${150 - i * 15}, 70%, 50%)`, width: `${Math.min(100, (s.count / (stats.subjectDistribution[0]?.count || 1)) * 100)}%`, transition: 'width 0.5s ease' }} />
                                     </div>
                                 </div>
                             ))}

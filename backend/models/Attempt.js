@@ -38,6 +38,8 @@ const attemptSchema = new mongoose.Schema(
         timeTaken: { type: Number, default: 0 }, // in seconds
         weakSubjects: [{ type: String }],
         negativeMarking: { type: Boolean, default: false },
+        // For university exam sessions
+        sessionCode: { type: String, default: null },
     },
     { timestamps: true }
 );

@@ -18,6 +18,8 @@ import ExamPage from './pages/student/Exam';
 import ResultPage from './pages/student/Result';
 import LeaderboardPage from './pages/student/Leaderboard';
 import ProfilePage from './pages/student/Profile';
+import SessionResultPage from './pages/student/SessionResult';
+import MyResults from './pages/student/MyResults';
 
 // Admin pages
 import AdminDashboard from './pages/admin/Dashboard';
@@ -25,6 +27,9 @@ import UploadPage from './pages/admin/Upload';
 import ManageQuestions from './pages/admin/ManageQuestions';
 import ManageUsers from './pages/admin/ManageUsers';
 import AnalyticsPage from './pages/admin/Analytics';
+import BulkCreateStudents from './pages/admin/BulkCreateStudents';
+import ManageExamSessions from './pages/admin/ManageExamSessions';
+import ExamSessionResults from './pages/admin/ExamSessionResults';
 
 // Protected route wrappers
 const ProtectedRoute = ({ children, adminOnly = false }) => {
@@ -66,8 +71,10 @@ function App() {
         <Route path="/practice" element={<PracticePage />} />
         <Route path="/exam" element={<ExamPage />} />
         <Route path="/result/:attemptId" element={<ResultPage />} />
+        <Route path="/my-results" element={<MyResults />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/session-result/:code" element={<SessionResultPage />} />
       </Route>
 
       {/* Admin */}
@@ -77,6 +84,9 @@ function App() {
         <Route path="/admin/questions" element={<ManageQuestions />} />
         <Route path="/admin/users" element={<ManageUsers />} />
         <Route path="/admin/analytics" element={<AnalyticsPage />} />
+        <Route path="/admin/bulk-students" element={<BulkCreateStudents />} />
+        <Route path="/admin/exam-sessions" element={<ManageExamSessions />} />
+        <Route path="/admin/exam-sessions/:id/results" element={<ExamSessionResults />} />
       </Route>
 
       {/* Fallback */}

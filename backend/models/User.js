@@ -25,7 +25,7 @@ const userSchema = new mongoose.Schema(
         },
         role: {
             type: String,
-            enum: ['admin', 'student'],
+            enum: ['admin', 'student', 'exam-student'],
             default: 'student',
         },
         bookmarks: [
@@ -41,6 +41,25 @@ const userSchema = new mongoose.Schema(
         isActive: {
             type: Boolean,
             default: true,
+        },
+        // University Specific Fields
+        studentId: {
+            type: String,
+            unique: true,
+            sparse: true, // Allow multiple nulls for non-exam students
+            trim: true,
+        },
+        seatNumber: {
+            type: String,
+            trim: true,
+        },
+        semester: {
+            type: String,
+            trim: true,
+        },
+        department: {
+            type: String,
+            trim: true,
         },
     },
     { timestamps: true }

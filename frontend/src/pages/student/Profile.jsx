@@ -82,7 +82,7 @@ export default function ProfilePage() {
                             <input className="input" value={user?.role} disabled style={{ opacity: 0.6, cursor: 'not-allowed', textTransform: 'capitalize' }} />
                         </div>
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                                 <Calendar size={13} /> Member Since
                             </label>
                             <input className="input" value={new Date(user?.createdAt).toLocaleDateString('en-IN', { dateStyle: 'long' })} disabled style={{ opacity: 0.6, cursor: 'not-allowed' }} />

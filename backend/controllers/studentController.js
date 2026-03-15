@@ -309,14 +309,32 @@ const getLeaderboard = async (req, res) => {
 /** GET /api/student/result-pdf/:attemptId */
 const downloadResultPDF = async (req, res) => {
     try {
-        const attempt = await Attempt.findOne({ _id: req.params.attemptId, userId: req.user._id }).populate(
-            'answers.questionId',
-            'question options correctAnswer subject'
-        );
-
+        const attempt = await Attempt.findOne({ _id: req.params.attemptId, userId: req.user._id });
         if (!attempt) return res.status(404).json({ success: false, message: 'Attempt not found' });
 
-        generateResultPDF(res, attempt, req.user);
+        let populated = attempt;
+
+        if (attempt.sessionCode) {
+            // It's a session attempt, we need to get question text from the session
+            const session = await ExamSession.findOne({ sessionCode: attempt.sessionCode });
+            if (session) {
+                const seed = req.user._id.toString() + attempt.sessionCode;
+                const shuffled = seededShuffle(session.questions, seed);
+                // Attach question text to answers for the PDF generator
+                populated = attempt.toObject();
+                populated.answers.forEach((ans, i) => {
+                    const q = shuffled[i];
+                    if (q) ans.questionText = q.question;
+                });
+            }
+        } else {
+            populated = await Attempt.populate(attempt, {
+                path: 'answers.questionId',
+                select: 'question options correctAnswer subject'
+            });
+        }
+
+        generateResultPDF(res, populated, req.user);
     } catch (error) {
         console.error('PDF Error:', error);
         res.status(500).json({ success: false, message: 'Could not generate PDF' });
@@ -354,8 +372,267 @@ const updateProfile = async (req, res) => {
     }
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// EXAM SESSION – STUDENT ENDPOINTS
+// ════════════════════════════════════════════════════════════════════════════
+const ExamSession = require('../models/ExamSession');
+
+/** Seeded shuffle using user._id + sessionCode as a deterministic seed */
+const seededShuffle = (arr, seed) => {
+    const array = [...arr];
+    let s = 0;
+    for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) >>> 0;
+    for (let i = array.length - 1; i > 0; i--) {
+        s = (s * 1664525 + 1013904223) >>> 0;
+        const j = s % (i + 1);
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+};
+
+/** POST /api/student/join-exam  body: { code } */
+const joinExamByCode = async (req, res) => {
+    try {
+        const { code } = req.body;
+        if (!code) return res.status(400).json({ success: false, message: 'Exam code is required' });
+
+        const session = await ExamSession.findOne({ sessionCode: code.trim().toUpperCase() }).select('-questions');
+        if (!session) return res.status(404).json({ success: false, message: 'Invalid exam code' });
+        if (!session.isActive) return res.status(403).json({ success: false, message: 'This exam is not active yet. Please wait for the admin to open it.' });
+
+        // Check if student is in allowed list (empty list = open to all exam-students)
+        if (session.allowedStudents.length > 0) {
+            const allowed = session.allowedStudents.some(id => id.toString() === req.user._id.toString());
+            if (!allowed) return res.status(403).json({ success: false, message: 'You are not enrolled in this exam.' });
+        }
+
+        // Check if already submitted
+        const existing = await Attempt.findOne({ userId: req.user._id, sessionCode: session.sessionCode });
+        if (existing) {
+            return res.status(409).json({ success: false, message: 'You have already submitted this exam.', attemptId: existing._id, showResults: session.showResults });
+        }
+
+        res.json({
+            success: true,
+            session: {
+                _id: session._id,
+                sessionCode: session.sessionCode,
+                title: session.title,
+                subject: session.subject,
+                duration: session.duration,
+                negativeMarking: session.negativeMarking,
+                totalQuestions: session.questions?.length || 0,
+            },
+        });
+    } catch (error) {
+        console.error('Join exam error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/** GET /api/student/session-exam/:code/questions */
+const getSessionQuestions = async (req, res) => {
+    try {
+        const { code } = req.params;
+        const session = await ExamSession.findOne({ sessionCode: code.toUpperCase() });
+        if (!session) return res.status(404).json({ success: false, message: 'Invalid exam code' });
+        if (!session.isActive) return res.status(403).json({ success: false, message: 'Exam is not active' });
+
+        // Shuffle questions uniquely per student (seeded)
+        const seed = req.user._id.toString() + code;
+        const shuffled = seededShuffle(session.questions, seed).map((q, i) => ({
+            _id: q._id || i,
+            question: q.question,
+            options: seededShuffle(q.options, seed + i), // also shuffle options
+            subject: q.subject,
+            difficulty: q.difficulty,
+            marks: q.marks,
+            // Don't send correctAnswer to client
+        }));
+
+        res.json({ success: true, questions: shuffled, sessionCode: code.toUpperCase() });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/** POST /api/student/session-exam/:code/submit */
+const submitSessionExam = async (req, res) => {
+    try {
+        const { code } = req.params;
+        const { answers, timeTaken } = req.body; // answers: [{ questionIndex, selectedOption }]
+
+        const session = await ExamSession.findOne({ sessionCode: code.toUpperCase() });
+        if (!session) return res.status(404).json({ success: false, message: 'Invalid exam code' });
+
+        // Prevent double submission
+        const existing = await Attempt.findOne({ userId: req.user._id, sessionCode: session.sessionCode });
+        if (existing) return res.status(409).json({ success: false, message: 'Already submitted', attemptId: existing._id });
+
+        // Rebuild shuffled order for this student (same seed = same order)
+        const seed = req.user._id.toString() + code;
+        const shuffled = seededShuffle(session.questions, seed);
+
+        let score = 0;
+        let maxScore = 0;
+        let correctCount = 0;
+        let wrongCount = 0;
+        let skippedCount = 0;
+        const processedAnswers = [];
+
+        shuffled.forEach((q, i) => {
+            const marks = q.marks || 1;
+            maxScore += marks;
+            const selected = answers?.[i]?.selectedOption || null;
+
+            // Map selected option letter to actual option accounting for shuffled options
+            const shuffledOptions = seededShuffle(q.options, seed + i);
+            // Find which letter maps to what content; selected is 'A'/'B'/'C'/'D' index in shuffled
+            const OPTS = ['A', 'B', 'C', 'D'];
+            let selectedContent = null;
+            if (selected) {
+                const idx = OPTS.indexOf(selected);
+                selectedContent = shuffledOptions[idx] || null;
+            }
+
+            // Find correct answer content
+            const correctIdx = OPTS.indexOf(q.correctAnswer);
+            const correctContent = q.options[correctIdx];
+
+            // Is selected content same as correct content?
+            const isCorrect = selectedContent !== null && selectedContent === correctContent;
+            const isSkipped = !selected;
+
+            if (isSkipped) skippedCount++;
+            else if (isCorrect) { correctCount++; score += marks; }
+            else { wrongCount++; if (session.negativeMarking) score -= marks * 0.25; }
+
+            processedAnswers.push({
+                questionId: q._id || null,
+                selectedOption: selected,
+                correctOption: q.correctAnswer,
+                isCorrect,
+                marks,
+            });
+        });
+
+        const accuracy = maxScore > 0 ? Math.max(0, (score / maxScore) * 100) : 0;
+
+        const attempt = await Attempt.create({
+            userId: req.user._id,
+            mode: 'exam',
+            subject: session.subject,
+            sessionCode: session.sessionCode,
+            answers: processedAnswers,
+            score: Math.max(0, Math.round(score * 100) / 100),
+            maxScore,
+            accuracy: parseFloat(accuracy.toFixed(2)),
+            totalQuestions: shuffled.length,
+            correctCount,
+            wrongCount,
+            skippedCount,
+            timeTaken: parseInt(timeTaken) || 0,
+            negativeMarking: session.negativeMarking,
+        });
+
+        res.status(201).json({
+            success: true,
+            message: 'Exam submitted successfully',
+            attemptId: attempt._id,
+            showResults: session.showResults,
+            summary: { score: attempt.score, maxScore: attempt.maxScore, accuracy: attempt.accuracy, correctCount, wrongCount, skippedCount },
+        });
+    } catch (error) {
+        console.error('Submit session exam error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/** GET /api/student/my-results */
+const getMySessionResults = async (req, res) => {
+    try {
+        const attempts = await Attempt.find({ userId: req.user._id, sessionCode: { $ne: null } })
+            .sort({ createdAt: -1 })
+            .select('sessionCode score maxScore accuracy subject createdAt');
+
+        // Group by session to see if results are released
+        const sessionCodes = [...new Set(attempts.map(a => a.sessionCode))];
+        const sessions = await ExamSession.find({ sessionCode: { $in: sessionCodes } }).select('sessionCode title showResults');
+        
+        const sessionMap = {};
+        sessions.forEach(s => sessionMap[s.sessionCode] = s);
+
+        const results = attempts.map(a => ({
+            ...a._doc,
+            sessionTitle: sessionMap[a.sessionCode]?.title || 'Unknown Session',
+            resultsReleased: sessionMap[a.sessionCode]?.showResults || false
+        }));
+
+        res.json({ success: true, results });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/** GET /api/student/session-exam/:code/result */
+const getSessionResult = async (req, res) => {
+    try {
+        const { code } = req.params;
+        const session = await ExamSession.findOne({ sessionCode: code.toUpperCase() });
+        if (!session) return res.status(404).json({ success: false, message: 'Invalid exam code' });
+
+        const attempt = await Attempt.findOne({ userId: req.user._id, sessionCode: session.sessionCode });
+        if (!attempt) return res.status(404).json({ success: false, message: 'No submission found for this exam' });
+
+        if (!session.showResults) {
+            return res.json({
+                success: true,
+                resultsReleased: false,
+                message: 'Results have not been released yet by the admin.',
+                summary: { score: attempt.score, maxScore: attempt.maxScore, accuracy: attempt.accuracy },
+            });
+        }
+
+        // Rebuild shuffled question list with correct answers for review
+        const seed = req.user._id.toString() + code;
+        const shuffled = seededShuffle(session.questions, seed).map((q, i) => {
+            const shuffledOptions = seededShuffle(q.options, seed + i);
+            return {
+                question: q.question,
+                options: shuffledOptions,
+                correctAnswer: q.correctAnswer,
+                subject: q.subject,
+                difficulty: q.difficulty,
+                marks: q.marks,
+            };
+        });
+
+        res.json({
+            success: true,
+            resultsReleased: true,
+            attempt: {
+                score: attempt.score,
+                maxScore: attempt.maxScore,
+                accuracy: attempt.accuracy,
+                correctCount: attempt.correctCount,
+                wrongCount: attempt.wrongCount,
+                skippedCount: attempt.skippedCount,
+                timeTaken: attempt.timeTaken,
+                submittedAt: attempt.createdAt,
+                answers: attempt.answers,
+            },
+            questions: shuffled,
+            session: { title: session.title, subject: session.subject },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 module.exports = {
     getPracticeQuestions, submitExam, getAttemptHistory, getAttemptById,
     getDashboardStats, addBookmark, removeBookmark, getBookmarks,
     getLeaderboard, downloadResultPDF, getWrongQuestions, updateProfile,
+    // Session exam
+    joinExamByCode, getSessionQuestions, submitSessionExam, getSessionResult, getMySessionResults,
 };

@@ -46,7 +46,7 @@ export default function StudentDashboard() {
     })) || [];
 
     return (
-        <div className="animate-fade-in">
+        <div className="animate-fade-in" style={{ maxWidth: 1100, margin: '0 auto' }}>
             {/* Header */}
             <div style={{ marginBottom: '2rem' }}>
                 <h1 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.25rem' }}>

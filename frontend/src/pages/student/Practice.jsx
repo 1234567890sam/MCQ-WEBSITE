@@ -87,7 +87,7 @@ export default function PracticePage() {
     // ── Config Step ─────────────────────────────────────────────────────── //
     if (step === 'config') {
         return (
-            <div className="animate-fade-in" style={{ maxWidth: 600, margin: '0 auto' }}>
+            <div className="animate-fade-in" style={{ maxWidth: 700, margin: '0 auto' }}>
                 <div style={{ marginBottom: '2rem' }}>
                     <h1 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.25rem' }}>Practice Mode</h1>
                     <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Configure your practice session</p>
@@ -161,7 +161,7 @@ export default function PracticePage() {
     const answered = Object.keys(answers).length;
 
     return (
-        <div className="animate-fade-in" style={{ maxWidth: 720, margin: '0 auto' }}>
+        <div className="animate-fade-in" style={{ maxWidth: 850, margin: '0 auto' }}>
             {/* Progress bar */}
             <div style={{ marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>

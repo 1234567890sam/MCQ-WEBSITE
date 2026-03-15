@@ -6,6 +6,7 @@ import { Search, Plus, Edit2, Trash2, Check, X, Filter, ChevronLeft, ChevronRigh
 export default function ManageQuestions() {
     const [questions, setQuestions] = useState([]);
     const [subjects, setSubjects] = useState([]);
+    const [subjectCounts, setSubjectCounts] = useState([]);
     const [filter, setFilter] = useState({ subject: '', difficulty: '', search: '' });
     const [pagination, setPagination] = useState({ page: 1, total: 0, pages: 1 });
     const [loading, setLoading] = useState(true);
@@ -27,7 +28,10 @@ export default function ManageQuestions() {
     }, [filter]);
 
     useEffect(() => {
-        api.get('/admin/subjects').then(({ data }) => setSubjects(data.subjects)).catch(() => { });
+        api.get('/admin/subjects').then(({ data }) => {
+            setSubjects(data.subjects);
+            if (data.subjectCounts) setSubjectCounts(data.subjectCounts);
+        }).catch(() => { });
     }, []);
 
     useEffect(() => { fetchQuestions(1); }, [filter]);
@@ -52,6 +56,21 @@ export default function ManageQuestions() {
             await api.delete(`/admin/questions/${id}`);
             toast.success('Deleted');
             fetchQuestions(pagination.page);
+            api.get('/admin/subjects').then(({ data }) => { setSubjects(data.subjects); if (data.subjectCounts) setSubjectCounts(data.subjectCounts); });
+        } catch { toast.error('Delete failed'); }
+    };
+
+    const deleteSubject = async (subject) => {
+        const countObj = subjectCounts.find(s => s._id === subject);
+        const count = countObj ? countObj.count : 'all';
+        if (!window.confirm(`Are you sure you want to delete ${count} questions of subject "${subject}"? This action cannot be undone.`)) return;
+        
+        try {
+            await api.delete(`/admin/questions/subject/${subject}`);
+            toast.success(`Subject ${subject} deleted`);
+            setFilter({ ...filter, subject: '' });
+            api.get('/admin/subjects').then(({ data }) => { setSubjects(data.subjects); if (data.subjectCounts) setSubjectCounts(data.subjectCounts); });
+            fetchQuestions(1);
         } catch { toast.error('Delete failed'); }
     };
 
@@ -75,7 +94,7 @@ export default function ManageQuestions() {
                     </div>
                     <select className="input" value={filter.subject} onChange={(e) => setFilter({ ...filter, subject: e.target.value })}>
                         <option value="">All Subjects</option>
-                        {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+                        {subjectCounts.length > 0 ? subjectCounts.map((s) => <option key={s._id} value={s._id}>{s._id} ({s.count})</option>) : subjects.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <select className="input" value={filter.difficulty} onChange={(e) => setFilter({ ...filter, difficulty: e.target.value })}>
                         <option value="">All Difficulties</option>
@@ -84,6 +103,11 @@ export default function ManageQuestions() {
                     <button className="btn-secondary" onClick={() => setFilter({ subject: '', difficulty: '', search: '' })} style={{ justifyContent: 'center' }}>
                         <Filter size={15} /> Clear
                     </button>
+                    {filter.subject && (
+                        <button onClick={() => deleteSubject(filter.subject)} style={{ background: '#ef4444', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>
+                            <Trash2 size={15} /> Delete Subject
+                        </button>
+                    )}
                 </div>
             </div>
 

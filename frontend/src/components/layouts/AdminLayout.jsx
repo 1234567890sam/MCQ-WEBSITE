@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import {
     LayoutDashboard, Upload, BookOpen, Users, BarChart3,
-    LogOut, Sun, Moon, Menu, X, Brain, Shield
+    LogOut, Sun, Moon, Menu, X, Brain, Shield, GraduationCap, UserPlus
 } from 'lucide-react';
 
 const links = [
@@ -13,12 +13,14 @@ const links = [
     { to: '/admin/questions', icon: BookOpen, label: 'Questions' },
     { to: '/admin/users', icon: Users, label: 'Users' },
     { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
+    { to: '/admin/exam-sessions', icon: GraduationCap, label: 'Exam Sessions' },
+    { to: '/admin/bulk-students', icon: UserPlus, label: 'Bulk Students' },
 ];
 
 export default function AdminLayout() {
     const { user, logout } = useAuth();
     const { dark, toggle } = useTheme();
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(window.innerWidth > 768);
     const navigate = useNavigate();
 
     const handleLogout = async () => {
@@ -32,7 +34,7 @@ export default function AdminLayout() {
                 <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setOpen(false)} />
             )}
 
-            <aside className={`sidebar ${open ? 'open' : ''}`} style={{ display: 'flex', flexDirection: 'column' }}>
+            <aside className={`sidebar ${open ? '' : 'collapsed'}`} style={{ display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '1.25rem 1rem', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{ width: 36, height: 36, borderRadius: '10px', background: 'linear-gradient(135deg, #f59e0b, #ef4444)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <Brain size={20} color="white" />
@@ -79,13 +81,20 @@ export default function AdminLayout() {
                 </div>
             </aside>
 
-            <div className="main-content" style={{ flex: 1, minWidth: 0, width: '100%' }}>
-                <header className="mobile-only" style={{ padding: '0.875rem 1.25rem', borderBottom: '1px solid var(--border-light)', alignItems: 'center', justifyContent: 'space-between', background: 'var(--card-light)', position: 'sticky', top: 0, zIndex: 20 }}>
-                    <button onClick={() => setOpen(!open)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {open ? <X size={24} /> : <Menu size={24} />}
+            <div className={`main-content ${open ? '' : 'full-width'}`} style={{ flex: 1, minWidth: 0, width: '100%', display: 'flex', flexDirection: 'column' }}>
+                <header style={{ padding: '0.75rem 1.25rem', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--card-light)', position: 'sticky', top: 0, zIndex: 20 }}>
+                    <button onClick={() => setOpen(!open)} style={{ background: 'rgba(245,158,11,0.08)', border: 'none', cursor: 'pointer', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.5rem', borderRadius: '0.75rem', transition: 'all 0.2s' }}>
+                        <Menu size={22} />
                     </button>
-                    <span style={{ fontWeight: 800, color: '#f59e0b', fontSize: '1.2rem' }}>Admin Panel</span>
-                    <div style={{ width: 24 }} />
+                    {!open && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ width: 28, height: 28, borderRadius: '8px', background: 'linear-gradient(135deg, #f59e0b, #ef4444)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Brain size={16} color="white" />
+                            </div>
+                            <span style={{ fontWeight: 800, fontSize: '0.9rem', color: '#f59e0b' }}>SmartMCQ</span>
+                        </div>
+                    )}
+                    <span className="mobile-only" style={{ fontWeight: 800, color: '#f59e0b', fontSize: '1.2rem', marginLeft: 'auto' }}>Admin Panel</span>
                 </header>
                 <div style={{ padding: '1.5rem', flex: 1 }}>
                     <Outlet />

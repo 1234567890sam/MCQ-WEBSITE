@@ -62,9 +62,9 @@ const generateResultPDF = (res, attempt, user) => {
         doc.moveDown(0.5);
 
         attempt.answers.forEach((ans, i) => {
-            const q = ans.questionId;
-            if (!q) return;
-
+            const q = ans.questionId || {};
+            const questionText = q.question || ans.questionText || `Question ${i + 1}`;
+            
             const status = ans.isCorrect ? '✓ Correct' : ans.selectedOption ? '✗ Wrong' : '— Skipped';
             const color = ans.isCorrect ? '#16a34a' : ans.selectedOption ? '#dc2626' : '#6b7280';
 
@@ -72,7 +72,7 @@ const generateResultPDF = (res, attempt, user) => {
             if (doc.y > doc.page.height - 150) doc.addPage();
 
             doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
-            doc.text(`Q${i + 1}. ${q.question || 'N/A'}`, { width: 500 });
+            doc.text(`Q${i + 1}. ${questionText}`, { width: 500 });
 
             doc.fontSize(9).font('Helvetica').fillColor(color);
             doc.text(`${status}  |  Your Answer: ${ans.selectedOption || 'None'}  |  Correct: ${ans.correctOption}`);
