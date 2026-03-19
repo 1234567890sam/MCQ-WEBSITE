@@ -22,9 +22,7 @@ export default function UploadPage() {
         fd.append('file', file);
         setUploading(true);
         try {
-            const { data } = await api.post('/admin/upload-questions', fd, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
+            const { data } = await api.post('/admin/upload-questions', fd);
             setResult(data);
             if (data.success) toast.success(`${data.totalValid} questions uploaded!`);
         } catch (err) {
@@ -36,10 +34,15 @@ export default function UploadPage() {
 
     const downloadTemplate = () => {
         // Create a simple CSV-like explanation as text
-        const csvContent = 'NO.,QUESTION,OPTION A,OPTION B,OPTION C,OPTION D,ANSWER,SUBJECT,DIFFICULTY,MARKS\n1,What is 2+2?,1,2,3,4,D,Math,Easy,1\n2,Capital of France?,Berlin,London,Paris,Rome,C,Geography,Easy,1';
+        const csvContent = 'NO.,QUESTION,OPTION A,OPTION B,OPTION C,OPTION D,ANSWER,SUBJECT,MARKS\n1,What is 2+2?,1,2,3,4,D,Math,1\n2,Capital of France?,Berlin,London,Paris,Rome,C,Geography,1';
         const blob = new Blob([csvContent], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = 'sample_template.csv'; a.click();
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'sample_template.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
         URL.revokeObjectURL(url);
         toast.success('Sample template downloaded (convert to .xlsx before uploading)');
     };
@@ -57,12 +60,12 @@ export default function UploadPage() {
                     <FileSpreadsheet size={18} /> Required Column Format
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.4rem' }}>
-                    {['NO.', 'QUESTION', 'OPTION A', 'OPTION B', 'OPTION C', 'OPTION D', 'ANSWER', 'SUBJECT', 'DIFFICULTY', 'MARKS'].map((col) => (
+                    {['NO.', 'QUESTION', 'OPTION A', 'OPTION B', 'OPTION C', 'OPTION D', 'ANSWER', 'SUBJECT', 'MARKS'].map((col) => (
                         <span key={col} style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '0.3rem 0.6rem', borderRadius: '0.4rem', fontSize: '0.75rem', fontWeight: 700, fontFamily: 'monospace', textAlign: 'center' }}>{col}</span>
                     ))}
                 </div>
                 <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#64748b' }}>
-                    ⚡ ANSWER must be A/B/C/D · DIFFICULTY must be Easy/Medium/Hard · MARKS defaults to 1
+                    ⚡ ANSWER must be A/B/C/D · MARKS defaults to 1
                 </div>
                 <button onClick={downloadTemplate} className="btn-secondary" style={{ marginTop: '0.75rem', fontSize: '0.8rem', padding: '0.4rem 0.875rem' }}>
                     <Download size={14} /> Download Sample

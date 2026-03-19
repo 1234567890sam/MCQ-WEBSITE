@@ -11,7 +11,7 @@ export default function ExamPage() {
     const { setHideNav } = useOutletContext() || {};
     const navigate = useNavigate();
     const [subjects, setSubjects] = useState([]);
-    const [config, setConfig] = useState({ subject: 'All', difficulty: 'All', count: 70, duration: 30, negativeMarking: false });
+    const [config, setConfig] = useState({ subject: 'All', count: 70, duration: 30, negativeMarking: false });
     const [questions, setQuestions] = useState([]);
     const [answers, setAnswers] = useState({});
     const [current, setCurrent] = useState(0);
@@ -128,7 +128,6 @@ export default function ExamPage() {
         try {
             const params = { count: config.count };
             if (config.subject !== 'All') params.subject = config.subject;
-            if (config.difficulty !== 'All') params.difficulty = config.difficulty;
             const { data } = await api.get('/student/practice', { params });
             setQuestions(data.questions);
             setAnswers({});
@@ -260,17 +259,6 @@ export default function ExamPage() {
                             </select>
                         </div>
 
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Difficulty</label>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
-                                {['All', 'Easy', 'Medium', 'Hard'].map((d) => (
-                                    <button key={d} onClick={() => setConfig({ ...config, difficulty: d })}
-                                        style={{ padding: '0.75rem', borderRadius: '0.75rem', border: `2px solid ${config.difficulty === d ? '#6366f1' : 'var(--border-light)'}`, background: config.difficulty === d ? 'rgba(99,102,241,0.1)' : 'transparent', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', color: config.difficulty === d ? '#6366f1' : 'inherit' }}>
-                                        {d}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
 
                         <div>
                             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -348,7 +336,6 @@ export default function ExamPage() {
             {q && (
                 <div className="card shadow-md" style={{ marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                        <span className={`badge badge-${q.difficulty?.toLowerCase()}`}>{q.difficulty}</span>
                         <span className="badge" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>{q.subject}</span>
                         <span className="badge" style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981' }}>{q.marks || 1} mark{q.marks !== 1 ? 's' : ''}</span>
                         {(mode === 'session' ? sessionInfo?.negativeMarking : config.negativeMarking) && <span className="badge" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>-0.25 wrong</span>}

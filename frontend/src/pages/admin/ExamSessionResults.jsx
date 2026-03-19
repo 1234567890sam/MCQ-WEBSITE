@@ -34,10 +34,19 @@ export default function ExamSessionResults() {
         } catch { toast.error('Failed to toggle'); }
     };
 
-    const exportExcel = () => {
-        const token = localStorage.getItem('accessToken');
-        const url = `${api.defaults.baseURL}/admin/exam-sessions/${id}/export?token=${token}`;
-        window.open(url, '_blank');
+    const exportExcel = async () => {
+        try {
+            const r = await api.get(`/admin/exam-sessions/${id}/export`, { responseType: 'blob' });
+            const url = URL.createObjectURL(new Blob([r.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${session?.title}_Results.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            toast.success('Excel exported successfully');
+        } catch { toast.error('Export failed'); }
     };
 
     if (loading) return <div style={{ textAlign: 'center', padding: '4rem' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>;

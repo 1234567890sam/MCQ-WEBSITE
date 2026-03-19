@@ -24,29 +24,29 @@ const questionSchema = new mongoose.Schema(
             required: [true, 'Subject is required'],
             trim: true,
         },
-        difficulty: {
-            type: String,
-            enum: ['Easy', 'Medium', 'Hard'],
-            default: 'Medium',
-        },
-        marks: {
-            type: Number,
-            default: 1,
-            min: 0,
+        cos: { type: String, trim: true },
+        marks: { type: Number, default: 1, min: 0 },
+        // Multi-tenant
+        collegeId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'College',
+            required: true,
         },
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',
             required: true,
         },
-        // Track how many times answered correctly/incorrectly
         timesAttempted: { type: Number, default: 0 },
         timesCorrect: { type: Number, default: 0 },
+        // Soft delete
+        isDeleted: { type: Boolean, default: false },
+        deletedAt: { type: Date, default: null },
     },
     { timestamps: true }
 );
 
-// Text index for search
 questionSchema.index({ question: 'text', subject: 'text' });
+questionSchema.index({ collegeId: 1, isDeleted: 1 });
 
 module.exports = mongoose.model('Question', questionSchema);

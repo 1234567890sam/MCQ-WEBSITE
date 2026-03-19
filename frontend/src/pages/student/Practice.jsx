@@ -7,7 +7,7 @@ import { BookOpen, Filter, Hash, PlayCircle, CheckCircle2, XCircle, Bookmark, Bo
 export default function PracticePage() {
     const navigate = useNavigate();
     const [subjects, setSubjects] = useState([]);
-    const [config, setConfig] = useState({ subject: 'All', difficulty: 'All', count: 20 });
+    const [config, setConfig] = useState({ subject: 'All', count: 20 });
     const [questions, setQuestions] = useState([]);
     const [current, setCurrent] = useState(0);
     const [answers, setAnswers] = useState({});
@@ -28,7 +28,6 @@ export default function PracticePage() {
         try {
             const params = {};
             if (config.subject !== 'All') params.subject = config.subject;
-            if (config.difficulty !== 'All') params.difficulty = config.difficulty;
             params.count = config.count;
             const { data } = await api.get('/student/practice', { params });
             setQuestions(data.questions);
@@ -102,18 +101,6 @@ export default function PracticePage() {
                         </select>
                     </div>
 
-                    {/* Difficulty */}
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Difficulty</label>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
-                            {['All', 'Easy', 'Medium', 'Hard'].map((d) => (
-                                <button key={d} onClick={() => setConfig({ ...config, difficulty: d })}
-                                    style={{ padding: '0.75rem', borderRadius: '0.75rem', border: `2px solid ${config.difficulty === d ? '#6366f1' : 'var(--border-light)'}`, background: config.difficulty === d ? 'rgba(99,102,241,0.1)' : 'transparent', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', color: config.difficulty === d ? '#6366f1' : 'inherit' }}>
-                                    {d}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
 
                     {/* Count */}
                     <div>
@@ -177,7 +164,6 @@ export default function PracticePage() {
             <div className="card" style={{ marginBottom: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <span className={`badge badge-${q.difficulty?.toLowerCase()}`}>{q.difficulty}</span>
                         <span className="badge" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>{q.subject}</span>
                     </div>
                     <button onClick={() => toggleBookmark(q._id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: bookmarks.has(q._id) ? '#f59e0b' : '#94a3b8' }}>

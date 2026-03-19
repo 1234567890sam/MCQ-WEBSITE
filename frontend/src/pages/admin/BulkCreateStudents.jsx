@@ -15,9 +15,7 @@ export default function BulkCreateStudents() {
         const fd = new FormData();
         fd.append('file', file);
         try {
-            const { data } = await api.post('/admin/bulk-create-students', fd, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
+            const { data } = await api.post('/admin/bulk-students', fd);
             setResult(data);
             toast.success(data.message);
         } catch (err) {
@@ -33,8 +31,26 @@ export default function BulkCreateStudents() {
         const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = 'student_credentials.xlsx'; a.click();
+        a.href = url;
+        a.download = 'student_credentials.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    };
+
+    const downloadSample = async () => {
+        try {
+            const r = await api.get('/admin/download-sample/students', { responseType: 'blob' });
+            const url = URL.createObjectURL(new Blob([r.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'bulk_students_sample.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch { toast.error('Sample download failed'); }
     };
 
     return (
@@ -66,7 +82,7 @@ export default function BulkCreateStudents() {
                 </div>
                 <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ fontSize: '0.8rem', color: '#64748b' }}>💡 Passwords are automatically set same as the **STUDENT ID**.</div>
-                    <button onClick={() => window.open(`${api.defaults.baseURL}/admin/download-sample/students?token=${localStorage.getItem('accessToken')}`, '_blank')}
+                    <button onClick={downloadSample}
                         style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                         <Download size={14} /> Download Sample Excel
                     </button>

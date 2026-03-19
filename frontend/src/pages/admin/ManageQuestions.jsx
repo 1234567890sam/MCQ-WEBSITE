@@ -7,7 +7,7 @@ export default function ManageQuestions() {
     const [questions, setQuestions] = useState([]);
     const [subjects, setSubjects] = useState([]);
     const [subjectCounts, setSubjectCounts] = useState([]);
-    const [filter, setFilter] = useState({ subject: '', difficulty: '', search: '' });
+    const [filter, setFilter] = useState({ subject: '', search: '' });
     const [pagination, setPagination] = useState({ page: 1, total: 0, pages: 1 });
     const [loading, setLoading] = useState(true);
     const [editId, setEditId] = useState(null);
@@ -18,7 +18,6 @@ export default function ManageQuestions() {
         try {
             const params = { page, limit: 15 };
             if (filter.subject) params.subject = filter.subject;
-            if (filter.difficulty) params.difficulty = filter.difficulty;
             if (filter.search) params.search = filter.search;
             const { data } = await api.get('/admin/questions', { params });
             setQuestions(data.questions);
@@ -38,7 +37,7 @@ export default function ManageQuestions() {
 
     const startEdit = (q) => {
         setEditId(q._id);
-        setEditData({ question: q.question, options: [...q.options], correctAnswer: q.correctAnswer, subject: q.subject, difficulty: q.difficulty, marks: q.marks });
+        setEditData({ question: q.question, options: [...q.options], correctAnswer: q.correctAnswer, subject: q.subject, marks: q.marks });
     };
 
     const saveEdit = async () => {
@@ -92,15 +91,7 @@ export default function ManageQuestions() {
                         <Search size={16} style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
                         <input className="input" placeholder="Search questions..." value={filter.search} onChange={(e) => setFilter({ ...filter, search: e.target.value })} style={{ paddingLeft: '2.5rem' }} />
                     </div>
-                    <select className="input" value={filter.subject} onChange={(e) => setFilter({ ...filter, subject: e.target.value })}>
-                        <option value="">All Subjects</option>
-                        {subjectCounts.length > 0 ? subjectCounts.map((s) => <option key={s._id} value={s._id}>{s._id} ({s.count})</option>) : subjects.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    <select className="input" value={filter.difficulty} onChange={(e) => setFilter({ ...filter, difficulty: e.target.value })}>
-                        <option value="">All Difficulties</option>
-                        {['Easy', 'Medium', 'Hard'].map((d) => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                    <button className="btn-secondary" onClick={() => setFilter({ subject: '', difficulty: '', search: '' })} style={{ justifyContent: 'center' }}>
+                    <button className="btn-secondary" onClick={() => setFilter({ subject: '', search: '' })} style={{ justifyContent: 'center' }}>
                         <Filter size={15} /> Clear
                     </button>
                     {filter.subject && (
@@ -118,7 +109,7 @@ export default function ManageQuestions() {
                 <div className="table-container" style={{ marginBottom: '1.5rem' }}>
                     <table>
                         <thead>
-                            <tr><th>#</th><th>Question</th><th>Subject</th><th>Difficulty</th><th>Marks</th><th>Answer</th><th>Actions</th></tr>
+                            <tr><th>#</th><th>Question</th><th>Subject</th><th>Marks</th><th>Answer</th><th>Actions</th></tr>
                         </thead>
                         <tbody>
                             {questions.map((q, i) => (
@@ -147,15 +138,6 @@ export default function ManageQuestions() {
                                             <span className="badge" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>{q.subject}</span>
                                         )}
                                     </td>
-                                    <td>
-                                        {editId === q._id ? (
-                                            <select className="input" value={editData.difficulty} onChange={(e) => setEditData({ ...editData, difficulty: e.target.value })} style={{ padding: '0.4rem', fontSize: '0.8rem' }}>
-                                                {['Easy', 'Medium', 'Hard'].map((d) => <option key={d}>{d}</option>)}
-                                            </select>
-                                        ) : (
-                                            <span className={`badge badge-${q.difficulty?.toLowerCase()}`}>{q.difficulty}</span>
-                                        )}
-                                    </td>
                                     <td style={{ fontWeight: 700 }}>{q.marks}</td>
                                     <td>
                                         {editId === q._id ? (
@@ -182,7 +164,7 @@ export default function ManageQuestions() {
                                 </tr>
                             ))}
                             {questions.length === 0 && (
-                                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>No questions found</td></tr>
+                                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>No questions found</td></tr>
                             )}
                         </tbody>
                     </table>

@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { Brain, Mail, Lock, Eye, EyeOff, Moon, Sun, ArrowRight } from 'lucide-react';
 
 export default function Login() {
-    const { login } = useAuth();
+    const { login, getHomePath } = useAuth();
     const { dark, toggle } = useTheme();
     const navigate = useNavigate();
     const [form, setForm] = useState({ email: '', password: '' });
@@ -20,7 +20,14 @@ export default function Login() {
         try {
             const user = await login(form.email, form.password);
             toast.success(`Welcome back, ${user.name}!`);
-            navigate(user.role === 'admin' ? '/admin/dashboard' : '/dashboard');
+            // Role-based redirect
+            const roleRoutes = {
+                'saas-admin': '/saas/dashboard',
+                'college-admin': '/college-admin/dashboard',
+                'teacher': '/teacher/dashboard',
+                'student': '/dashboard',
+            };
+            navigate(roleRoutes[user.role] || '/dashboard');
         } catch (err) {
             const msg = err.response?.data?.message || 'Login failed. Please try again.';
             toast.error(msg);

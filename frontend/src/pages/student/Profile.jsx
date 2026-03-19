@@ -108,7 +108,6 @@ export default function ProfilePage() {
                                 <div key={q._id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                                            <span className={`badge badge-${q.difficulty?.toLowerCase()}`}>{q.difficulty}</span>
                                             <span className="badge" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>{q.subject}</span>
                                         </div>
                                         <p style={{ fontSize: '0.9rem', fontWeight: 500, lineHeight: 1.6 }}>{q.question}</p>

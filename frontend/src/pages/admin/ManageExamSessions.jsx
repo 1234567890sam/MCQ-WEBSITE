@@ -83,9 +83,7 @@ export default function ManageExamSessions() {
         fd.append('negativeMarking', form.negativeMarking);
         if (selectedStudents.length > 0) fd.append('allowedStudentIds', JSON.stringify(selectedStudents));
         try {
-            const { data } = await api.post('/admin/exam-sessions', fd, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
+            const { data } = await api.post('/admin/exam-sessions', fd);
             toast.success(`Exam created! Code: ${data.sessionCode}`);
             setShowForm(false);
             setForm({ title: '', subject: '', duration: 60, negativeMarking: false });
@@ -122,10 +120,19 @@ export default function ManageExamSessions() {
         } catch { toast.error('Delete failed'); }
     };
 
-    const exportResults = (id) => {
-        const token = localStorage.getItem('accessToken');
-        const url = `${api.defaults.baseURL}/admin/exam-sessions/${id}/export?token=${token}`;
-        window.open(url, '_blank');
+    const exportResults = async (id, title) => {
+        try {
+            const r = await api.get(`/admin/exam-sessions/${id}/export`, { responseType: 'blob' });
+            const url = URL.createObjectURL(new Blob([r.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${title || 'Exam'}_Results.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            toast.success('Excel exported successfully');
+        } catch { toast.error('Export failed'); }
     };
 
     return (
@@ -184,7 +191,19 @@ export default function ManageExamSessions() {
                                         {questionsFile && <div style={{ fontSize: '0.78rem', color: '#10b981', marginTop: 4 }}>✓ {questionsFile.name}</div>}
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
                                             <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Columns: QUESTION, OPTIONS, ANSWER...</div>
-                                            <button type="button" onClick={() => window.open(`${api.defaults.baseURL}/admin/download-sample/questions?token=${localStorage.getItem('accessToken')}`, '_blank')}
+                                            <button type="button" onClick={async () => {
+                                                try {
+                                                    const r = await api.get('/admin/download-sample/questions', { responseType: 'blob' });
+                                                    const url = URL.createObjectURL(new Blob([r.data]));
+                                                    const a = document.createElement('a');
+                                                    a.href = url;
+                                                    a.download = 'sample_questions.xlsx';
+                                                    document.body.appendChild(a);
+                                                    a.click();
+                                                    document.body.removeChild(a);
+                                                    URL.revokeObjectURL(url);
+                                                } catch { toast.error('Sample download failed'); }
+                                            }}
                                                 style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                                                 <Download size={12} /> Sample
                                             </button>

@@ -49,11 +49,10 @@ const uploadQuestions = async (req, res) => {
 /** GET /api/admin/questions */
 const getQuestions = async (req, res) => {
     try {
-        const { subject, difficulty, search, page = 1, limit = 20 } = req.query;
+        const { subject, search, page = 1, limit = 20 } = req.query;
         const filter = {};
 
         if (subject) filter.subject = subject;
-        if (difficulty) filter.difficulty = difficulty;
         if (search) filter.$text = { $search: search };
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -568,24 +567,29 @@ const downloadSampleExcel = async (req, res) => {
             data = [{
                 'QUESTION': 'What is the capital of France?',
                 'OPTION A': 'London', 'OPTION B': 'Paris', 'OPTION C': 'Berlin', 'OPTION D': 'Madrid',
-                'ANSWER': 'B', 'SUBJECT': 'Geography', 'DIFFICULTY': 'Easy', 'MARKS': 1
+                'ANSWER': 'B', 'SUBJECT': 'Geography', 'COs': 'CO1, CO2', 'MARKS': 1
             }, {
                 'QUESTION': '2 + 2 = ?',
                 'OPTION A': '3', 'OPTION B': '4', 'OPTION C': '5', 'OPTION D': '6',
-                'ANSWER': 'B', 'SUBJECT': 'Math', 'DIFFICULTY': 'Easy', 'MARKS': 1
+                'ANSWER': 'B', 'SUBJECT': 'Math', 'COs': 'CO3', 'MARKS': 1
             }];
             filename = 'exam_questions_sample.xlsx';
         } else {
             return res.status(400).json({ success: false, message: 'Invalid sample type' });
         }
 
-        const ws = XLSX.utils.json_to_sheet(data);
-        XLSX.utils.book_append_sheet(wb, ws, 'SampleData');
-        const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        const { generateExcel } = require('../utils/exportHelpers');
+        const buffer = generateExcel(data, 'SampleData');
 
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.send(buf);
+        res.setHeader('Content-Length', buffer.length);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        
+        console.log(`Sending Excel file: ${filename} (${buffer.length} bytes)`);
+        return res.status(200).end(buffer);
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });
     }

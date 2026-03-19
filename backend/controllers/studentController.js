@@ -1,15 +1,26 @@
 const Question = require('../models/Question');
 const Attempt = require('../models/Attempt');
 const User = require('../models/User');
+const College = require('../models/College');
 const { generateResultPDF } = require('../utils/pdfGenerator');
+const { seededShuffle } = require('../utils/shuffle');
 
 /** GET /api/student/practice */
 const getPracticeQuestions = async (req, res) => {
     try {
-        const { subject, difficulty, count = 10 } = req.query;
-        const filter = {};
+        // Fetch college to check practice mode permission
+        const college = await College.findById(req.user.collegeId);
+        if (!college || !college.isActive) {
+            return res.status(403).json({ success: false, message: 'Your college account is inactive.' });
+        }
+        if (college.features && college.features.practiceMode === false) {
+            return res.status(403).json({ success: false, message: 'Practice mode is disabled by your administrator.' });
+        }
+
+        const { subject, count = 10 } = req.query;
+        // Filter by student's college ONLY
+        const filter = { collegeId: req.user.collegeId, isDeleted: false };
         if (subject && subject !== 'All') filter.subject = subject;
-        if (difficulty && difficulty !== 'All') filter.difficulty = difficulty;
 
         const questions = await Question.aggregate([
             { $match: filter },
@@ -31,6 +42,16 @@ const getPracticeQuestions = async (req, res) => {
 const submitExam = async (req, res) => {
     try {
         const { answers, timeTaken, mode = 'exam', negativeMarking = false } = req.body;
+
+        if (mode === 'practice' || mode === 'exam') {
+            const college = await College.findById(req.user.collegeId);
+            if (!college || !college.isActive) {
+                return res.status(403).json({ success: false, message: 'Your college account is inactive.' });
+            }
+            if (college.features && college.features.practiceMode === false) {
+                return res.status(403).json({ success: false, message: 'This mode is currently disabled by your administrator.' });
+            }
+        }
 
         if (!answers || !Array.isArray(answers) || answers.length === 0) {
             return res.status(400).json({ success: false, message: 'Answers are required' });
@@ -145,7 +166,7 @@ const getAttemptById = async (req, res) => {
     try {
         const attempt = await Attempt.findOne({ _id: req.params.id, userId: req.user._id }).populate(
             'answers.questionId',
-            'question options correctAnswer subject difficulty marks'
+            'question options correctAnswer subject marks'
         );
         if (!attempt) return res.status(404).json({ success: false, message: 'Attempt not found' });
         res.json({ success: true, attempt });
@@ -220,7 +241,7 @@ const addBookmark = async (req, res) => {
             req.user._id,
             { $addToSet: { bookmarks: questionId } },
             { new: true }
-        ).populate('bookmarks', 'question subject difficulty');
+        ).populate('bookmarks', 'question subject');
 
         res.json({ success: true, bookmarks: user.bookmarks });
     } catch (error) {
@@ -236,7 +257,7 @@ const removeBookmark = async (req, res) => {
             req.user._id,
             { $pull: { bookmarks: questionId } },
             { new: true }
-        ).populate('bookmarks', 'question subject difficulty');
+        ).populate('bookmarks', 'question subject');
 
         res.json({ success: true, bookmarks: user.bookmarks });
     } catch (error) {
@@ -247,7 +268,7 @@ const removeBookmark = async (req, res) => {
 /** GET /api/student/bookmarks */
 const getBookmarks = async (req, res) => {
     try {
-        const user = await User.findById(req.user._id).populate('bookmarks', 'question options correctAnswer subject difficulty marks');
+        const user = await User.findById(req.user._id).populate('bookmarks', 'question options correctAnswer subject marks');
         res.json({ success: true, bookmarks: user.bookmarks || [] });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });
@@ -346,7 +367,7 @@ const getWrongQuestions = async (req, res) => {
     try {
         const attempt = await Attempt.findOne({ _id: req.params.attemptId, userId: req.user._id }).populate(
             'answers.questionId',
-            'question options correctAnswer subject difficulty marks'
+            'question options correctAnswer subject marks'
         );
 
         if (!attempt) return res.status(404).json({ success: false, message: 'Attempt not found' });
@@ -377,27 +398,20 @@ const updateProfile = async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 const ExamSession = require('../models/ExamSession');
 
-/** Seeded shuffle using user._id + sessionCode as a deterministic seed */
-const seededShuffle = (arr, seed) => {
-    const array = [...arr];
-    let s = 0;
-    for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) >>> 0;
-    for (let i = array.length - 1; i > 0; i--) {
-        s = (s * 1664525 + 1013904223) >>> 0;
-        const j = s % (i + 1);
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-};
-
-/** POST /api/student/join-exam  body: { code } */
+/** POST /api/student/join-exam  body: { code, testCode } */
 const joinExamByCode = async (req, res) => {
     try {
-        const { code } = req.body;
+        const { code, testCode } = req.body;
         if (!code) return res.status(400).json({ success: false, message: 'Exam code is required' });
 
         const session = await ExamSession.findOne({ sessionCode: code.trim().toUpperCase() }).select('-questions');
         if (!session) return res.status(404).json({ success: false, message: 'Invalid exam code' });
+
+        // Verify Test Code if set
+        if (session.testCode && session.testCode !== testCode?.trim()) {
+            return res.status(403).json({ success: false, message: 'Invalid Test Code. Please enter the 6-digit code provided by your teacher.' });
+        }
+
         if (!session.isActive) return res.status(403).json({ success: false, message: 'This exam is not active yet. Please wait for the admin to open it.' });
 
         // Check if student is in allowed list (empty list = open to all exam-students)
@@ -445,7 +459,6 @@ const getSessionQuestions = async (req, res) => {
             question: q.question,
             options: seededShuffle(q.options, seed + i), // also shuffle options
             subject: q.subject,
-            difficulty: q.difficulty,
             marks: q.marks,
             // Don't send correctAnswer to client
         }));
@@ -602,7 +615,6 @@ const getSessionResult = async (req, res) => {
                 options: shuffledOptions,
                 correctAnswer: q.correctAnswer,
                 subject: q.subject,
-                difficulty: q.difficulty,
                 marks: q.marks,
             };
         });
@@ -629,10 +641,27 @@ const getSessionResult = async (req, res) => {
     }
 };
 
+
+/** GET /api/student/subjects */
+const getStudentSubjects = async (req, res) => {
+    try {
+        const subjects = await Question.aggregate([
+            { $match: { collegeId: req.user.collegeId, isDeleted: false } },
+            { $group: { _id: '$subject', count: { $sum: 1 } } },
+            { $sort: { _id: 1 } },
+        ]);
+        res.json({ success: true, subjects: subjects.map(s => s._id), subjectCounts: subjects });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 module.exports = {
     getPracticeQuestions, submitExam, getAttemptHistory, getAttemptById,
     getDashboardStats, addBookmark, removeBookmark, getBookmarks,
     getLeaderboard, downloadResultPDF, getWrongQuestions, updateProfile,
+    getStudentSubjects,
     // Session exam
     joinExamByCode, getSessionQuestions, submitSessionExam, getSessionResult, getMySessionResults,
 };
+

@@ -4,19 +4,21 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import {
     LayoutDashboard, BookOpen, ClipboardList, Trophy, User,
-    LogOut, Sun, Moon, Menu, X, Brain
+    LogOut, Sun, Moon, Menu, X, Brain, PlayCircle, BarChart2, Shield
 } from 'lucide-react';
 
 const links = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/active-exams', icon: PlayCircle, label: 'Active Exams' },
     { to: '/practice', icon: BookOpen, label: 'Practice' },
     { to: '/exam', icon: ClipboardList, label: 'Exam Mode' },
-    { to: '/my-results', icon: Trophy, label: 'My Results' },
+    { to: '/my-results', icon: BarChart2, label: 'My Results' },
+    { to: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { to: '/profile', icon: User, label: 'Profile' },
 ];
 
 export default function StudentLayout() {
-    const { user, logout, isExamStudent } = useAuth();
+    const { user, logout, isPracticeEnabled } = useAuth();
     const { dark, toggle } = useTheme();
     const [open, setOpen] = useState(window.innerWidth > 768);
     const [hideNav, setHideNav] = useState(false);
@@ -36,7 +38,7 @@ export default function StudentLayout() {
 
             {/* Sidebar */}
             {!hideNav && (
-                <aside className={`sidebar ${open ? '' : 'collapsed'}`} style={{ display: 'flex', flexDirection: 'column' }}>
+                <aside className={`sidebar ${open ? 'open' : 'collapsed'}`} style={{ display: 'flex', flexDirection: 'column' }}>
                     {/* Logo */}
                     <div style={{ padding: '1.25rem 1rem', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <div className="gradient-bg" style={{ width: 36, height: 36, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -44,8 +46,8 @@ export default function StudentLayout() {
                         </div>
                         <div>
                             <div style={{ fontWeight: 800, fontSize: '0.95rem', lineHeight: 1 }}>SmartMCQ</div>
-                            <div style={{ fontSize: '0.7rem', color: isExamStudent ? '#10b981' : '#6366f1', fontWeight: 600 }}>
-                                {isExamStudent ? 'Exam Portal' : 'Pro'}
+                            <div style={{ fontSize: '0.65rem', color: !isPracticeEnabled ? '#10b981' : '#6366f1', fontWeight: 700, marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }}>
+                                {user?.collegeId?.name || (!isPracticeEnabled ? 'Exam Portal' : 'Pro')}
                             </div>
                         </div>
                     </div>
@@ -53,9 +55,12 @@ export default function StudentLayout() {
                     {/* Nav */}
                     <nav style={{ flex: 1, padding: '0.75rem' }}>
                         {links.filter(link => {
-                            if (isExamStudent) {
-                                return ['Exam Mode', 'My Results'].includes(link.label);
+                            // Practice-only links: visible only when college has practiceMode enabled
+                            const practiceOnlyLinks = ['Dashboard', 'Practice', 'Exam Mode', 'Leaderboard'];
+                            if (practiceOnlyLinks.includes(link.label)) {
+                                return isPracticeEnabled;
                             }
+                            // Active Exams and Profile always visible
                             return true;
                         }).map(({ to, icon: Icon, label }) => (
                             <NavLink
@@ -77,8 +82,8 @@ export default function StudentLayout() {
                             </div>
                             <div style={{ overflow: 'hidden' }}>
                                 <div style={{ fontWeight: 600, fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name}</div>
-                                <div style={{ fontSize: '0.7rem', color: isExamStudent ? '#10b981' : '#6366f1' }}>
-                                    {isExamStudent ? 'University Candidate' : 'Student'}
+                                <div style={{ fontSize: '0.7rem', color: !isPracticeEnabled ? '#10b981' : '#6366f1' }}>
+                                    {!isPracticeEnabled ? 'University Candidate' : 'Student'}
                                 </div>
                             </div>
                         </div>
@@ -95,7 +100,7 @@ export default function StudentLayout() {
             )}
 
             {/* Main */}
-            <div className={`main-content ${(hideNav || !open) ? 'full-width' : ''}`} style={{ flex: 1, minWidth: 0, width: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div className={`main-content ${(hideNav || !open) ? 'full-width' : ''} ${open ? 'sidebar-open' : ''}`} style={{ flex: 1, minWidth: 0, width: '100%', display: 'flex', flexDirection: 'column' }}>
                 {/* Desktop/Mobile Header Toggle */}
                 {!hideNav && (
                     <header style={{ padding: '0.75rem 1.25rem', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--card-light)', position: 'sticky', top: 0, zIndex: 20 }}>
@@ -103,10 +108,19 @@ export default function StudentLayout() {
                             <Menu size={22} />
                         </button>
                         
-                        <span className="mobile-only" style={{ fontWeight: 800, background: isExamStudent ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontSize: '1.2rem' }}>
-                            {isExamStudent ? 'Secure Exam Portal' : 'SmartMCQ Pro'}
-                        </span>
-                        
+                        {/* Centered College & Role */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', minWidth: 0, padding: '0 1rem' }}>
+                            <div style={{ fontWeight: 700, fontSize: 'clamp(0.8rem, 2vw, 0.95rem)', color: 'var(--text-main)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', maxWidth: '400px' }}>
+                                {user?.collegeId?.name}
+                            </div>
+                            <div style={{ fontSize: '0.65rem', color: !isPracticeEnabled ? '#10b981' : '#6366f1', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '2px' }}>
+                                <Shield size={10} /> {!isPracticeEnabled ? 'Secure Exam Portal' : 'SmartMCQ Pro'}
+                            </div>
+                        </div>
+
+                        {/* Placeholder to balance the burger menu width on the left */}
+                        <div style={{ width: 38 }} className="desktop-only"></div>
+
                         {!open && (
                              <div className="desktop-only" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <div className="gradient-bg" style={{ width: 28, height: 28, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

@@ -10,7 +10,7 @@ const parseExcel = (buffer) => {
     const sheet = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(sheet, { raw: false });
 
-    const required = ['QUESTION', 'OPTION A', 'OPTION B', 'OPTION C', 'OPTION D', 'ANSWER', 'SUBJECT', 'DIFFICULTY', 'MARKS'];
+    const required = ['QUESTION', 'OPTION A', 'OPTION B', 'OPTION C', 'OPTION D', 'ANSWER', 'SUBJECT', 'MARKS'];
 
     // Check required columns
     if (rows.length === 0) {
@@ -38,14 +38,13 @@ const parseExcel = (buffer) => {
         const optD = (row['OPTION D'] || '').trim();
         const answer = (row['ANSWER'] || '').trim().toUpperCase();
         const subject = (row['SUBJECT'] || '').trim();
-        const difficulty = (row['DIFFICULTY'] || '').trim();
+        const cos = (row['COs'] || row['COS'] || row['CO'] || '').trim();
         const marks = parseFloat(row['MARKS']) || 1;
 
         if (!question) rowErrors.push('QUESTION is empty');
         if (!optA || !optB || !optC || !optD) rowErrors.push('One or more options are empty');
         if (!['A', 'B', 'C', 'D'].includes(answer)) rowErrors.push(`ANSWER must be A/B/C/D, got: "${answer}"`);
         if (!subject) rowErrors.push('SUBJECT is empty');
-        if (!['Easy', 'Medium', 'Hard'].includes(difficulty)) rowErrors.push(`DIFFICULTY must be Easy/Medium/Hard, got: "${difficulty}"`);
 
         // Duplicate check
         const dupKey = question.toLowerCase();
@@ -63,7 +62,7 @@ const parseExcel = (buffer) => {
                 options: [optA, optB, optC, optD],
                 correctAnswer: answer,
                 subject,
-                difficulty,
+                cos,
                 marks,
             });
         }
@@ -134,7 +133,17 @@ const parseSessionQuestionsExcel = (buffer) => {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { raw: false });
 
-    if (!rows.length) return { questions: [], errors: ['Empty file'] };
+    const required = ['QUESTION', 'OPTION A', 'OPTION B', 'OPTION C', 'OPTION D', 'ANSWER', 'SUBJECT', 'MARKS'];
+
+    if (rows.length === 0) {
+        return { questions: [], errors: ['Excel file is empty or has no data rows'] };
+    }
+
+    const firstRow = rows[0];
+    const missingCols = required.filter((col) => !(col in firstRow));
+    if (missingCols.length > 0) {
+        return { questions: [], errors: [`Missing required columns: ${missingCols.join(', ')}`] };
+    }
 
     const questions = [];
     const errors = [];
@@ -148,7 +157,7 @@ const parseSessionQuestionsExcel = (buffer) => {
         const optD = (row['OPTION D'] || '').trim();
         const answer = (row['ANSWER'] || '').trim().toUpperCase();
         const subject = (row['SUBJECT'] || '').trim();
-        const difficulty = (row['DIFFICULTY'] || 'Medium').trim();
+        const cos = (row['COs'] || row['COS'] || row['CO'] || '').trim();
         const marks = parseFloat(row['MARKS']) || 1;
 
         const rowErrors = [];
@@ -164,7 +173,7 @@ const parseSessionQuestionsExcel = (buffer) => {
             options: [optA, optB, optC, optD],
             correctAnswer: answer,
             subject,
-            difficulty: ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium',
+            cos,
             marks,
         });
     });

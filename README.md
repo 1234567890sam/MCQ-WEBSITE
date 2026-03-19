@@ -8,7 +8,7 @@ A **production-ready SaaS-level MCQ Practice Web Application** built with the ME
 
 | Feature | Description |
 |---|---|
-| **Practice Mode** | Filter by subject, difficulty, count. Instant answer reveal & bookmark |
+| **Practice Mode** | Filter by subject, count. Instant answer reveal & bookmark |
 | **Exam Mode** | Countdown timer, auto-submit, negative marking, question navigator |
 | **Analytics Dashboard** | Chart.js charts for accuracy trend, subject performance |
 | **Admin Panel** | Upload via Excel, CRUD questions, manage users, analytics |
@@ -150,12 +150,11 @@ Open **http://localhost:5173**
 
 Your `.xlsx` file must have these exact column headers in row 1:
 
-| NO. | QUESTION | OPTION A | OPTION B | OPTION C | OPTION D | ANSWER | SUBJECT | DIFFICULTY | MARKS |
-|-----|----------|----------|----------|----------|----------|--------|---------|------------|-------|
-| 1 | What is 2+2? | 1 | 2 | 3 | 4 | D | Math | Easy | 1 |
+| NO. | QUESTION | OPTION A | OPTION B | OPTION C | OPTION D | ANSWER | SUBJECT | MARKS |
+|-----|----------|----------|----------|----------|----------|--------|---------|-------|
+| 1 | What is 2+2? | 1 | 2 | 3 | 4 | D | Math | 1 |
 
 - **ANSWER** must be `A`, `B`, `C`, or `D`
-- **DIFFICULTY** must be `Easy`, `Medium`, or `Hard`
 - The `NO.` column is parsed but NOT stored
 - Invalid/duplicate rows are reported but not halted
 

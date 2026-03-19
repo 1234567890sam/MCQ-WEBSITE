@@ -8,14 +8,10 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // Load user from stored access token on mount
     useEffect(() => {
         const token = localStorage.getItem('accessToken');
-        if (token) {
-            fetchMe();
-        } else {
-            setLoading(false);
-        }
+        if (token) fetchMe();
+        else setLoading(false);
     }, []);
 
     const fetchMe = async () => {
@@ -36,29 +32,51 @@ export const AuthProvider = ({ children }) => {
         return data.user;
     };
 
-    const signup = async (name, email, password, role = 'student') => {
-        const { data } = await api.post('/auth/signup', { name, email, password, role });
+    const signup = async (payload) => {
+        const { data } = await api.post('/auth/signup', payload);
         localStorage.setItem('accessToken', data.accessToken);
         setUser(data.user);
         return data.user;
     };
 
     const logout = useCallback(async () => {
-        try {
-            await api.post('/auth/logout');
-        } catch { }
+        try { await api.post('/auth/logout'); } catch { }
         localStorage.removeItem('accessToken');
         setUser(null);
         toast.success('Logged out successfully');
     }, []);
 
-    const isAdmin = user?.role === 'admin';
-    const isStudent = user?.role === 'student';
-    const isExamStudent = user?.role === 'exam-student';
+    // Role helpers
     const isAuthenticated = !!user;
+    const isStudent       = user?.role === 'student';
+    const isTeacher       = user?.role === 'teacher';
+    const isCollegeAdmin  = user?.role === 'college-admin';
+    const isSaasAdmin     = user?.role === 'saas-admin';
+    // Legacy compat
+    const isAdmin = isCollegeAdmin || isSaasAdmin;
+
+    // Practice mode: true only if SaaS admin enabled it for this college
+    const isPracticeEnabled = !!(user?.collegeId?.features?.practiceMode);
+
+    // Legacy: isExamStudent was used before practiceMode flag — keep for compat
+    const isExamStudent = isStudent && !isPracticeEnabled;
+
+    /** Returns the default redirect path for the user's role */
+    const getHomePath = () => {
+        if (isSaasAdmin)    return '/saas/dashboard';
+        if (isCollegeAdmin) return '/college-admin/dashboard';
+        if (isTeacher)      return '/teacher/dashboard';
+        // Students always land on Active Exams tab directly
+        return '/active-exams';
+    };
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, signup, logout, isAdmin, isStudent, isExamStudent, isAuthenticated, refreshUser: fetchMe }}>
+        <AuthContext.Provider value={{
+            user, loading, login, signup, logout, refreshUser: fetchMe,
+            isAuthenticated, isStudent, isTeacher, isCollegeAdmin, isSaasAdmin,
+            isAdmin, isExamStudent, isPracticeEnabled,
+            getHomePath,
+        }}>
             {children}
         </AuthContext.Provider>
     );

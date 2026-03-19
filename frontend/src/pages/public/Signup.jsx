@@ -1,27 +1,34 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import api from '../../api/axios';
 import toast from 'react-hot-toast';
-import { Brain, Mail, Lock, User, Eye, EyeOff, Moon, Sun, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Brain, Mail, Lock, User, Eye, EyeOff, Moon, Sun, ArrowRight, CheckCircle2, Building2 } from 'lucide-react';
 
 export default function Signup() {
     const { signup } = useAuth();
     const { dark, toggle } = useTheme();
     const navigate = useNavigate();
-    const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
+    const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '', collegeId: '' });
+    const [colleges, setColleges] = useState([]);
     const [showPwd, setShowPwd] = useState(false);
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        api.get('/auth/colleges').then(r => setColleges(r.data.colleges || [])).catch(() => {});
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!form.name || !form.email || !form.password) return toast.error('Please fill all fields');
+        if (!form.collegeId) return toast.error('Please select your college');
         if (form.password.length < 6) return toast.error('Password must be at least 6 characters');
         if (form.password !== form.confirm) return toast.error('Passwords do not match');
 
         setLoading(true);
         try {
-            const user = await signup(form.name, form.email, form.password);
+            const user = await signup({ name: form.name, email: form.email, password: form.password, collegeId: form.collegeId, role: 'student' });
             toast.success(`Welcome to SmartMCQ Pro, ${user.name}!`);
             navigate('/dashboard');
         } catch (err) {
@@ -63,6 +70,18 @@ export default function Signup() {
                             <div style={{ position: 'relative' }}>
                                 <User size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
                                 <input className="input" type="text" placeholder="John Doe" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={{ paddingLeft: '2.5rem' }} />
+                            </div>
+                        </div>
+
+                        {/* College */}
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.4rem' }}>Select College</label>
+                            <div style={{ position: 'relative' }}>
+                                <Building2 size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#6b7280' }} />
+                                <select className="input" value={form.collegeId} onChange={(e) => setForm({ ...form, collegeId: e.target.value })} style={{ paddingLeft: '2.5rem', appearance: 'auto' }}>
+                                    <option value="">— Select your college —</option>
+                                    {colleges.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+                                </select>
                             </div>
                         </div>
 

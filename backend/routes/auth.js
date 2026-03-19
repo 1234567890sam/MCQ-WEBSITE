@@ -1,11 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
-const { signup, login, refreshToken, logout, getMe } = require('../controllers/authController');
+const { signup, login, refreshToken, logout, getMe, getColleges } = require('../controllers/authController');
 const { verifyToken } = require('../middleware/auth');
 const { authLimiter } = require('../middleware/rateLimiter');
 
-// Validation rules
 const signupValidation = [
     body('name').trim().isLength({ min: 2, max: 50 }).withMessage('Name must be 2-50 characters'),
     body('email').isEmail().normalizeEmail().withMessage('Invalid email'),
@@ -17,7 +16,10 @@ const loginValidation = [
     body('password').notEmpty().withMessage('Password is required'),
 ];
 
-router.post('/signup', signupValidation, signup);
+// Public: list colleges for signup dropdown
+router.get('/colleges', getColleges);
+
+router.post('/signup', authLimiter, signupValidation, signup);
 router.post('/login', authLimiter, loginValidation, login);
 router.post('/refresh', refreshToken);
 router.post('/logout', logout);

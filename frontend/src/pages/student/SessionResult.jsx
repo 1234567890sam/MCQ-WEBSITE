@@ -112,7 +112,6 @@ export default function SessionResultPage() {
                     return (
                         <div key={i} className="card" style={{ borderLeft: `4px solid ${isCorrect ? '#10b981' : studentLetter ? '#ef4444' : '#94a3b8'}` }}>
                             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-                                <span className={`badge badge-${q.difficulty?.toLowerCase()}`}>{q.difficulty}</span>
                                 <span className="badge" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>{q.subject}</span>
                                 <span style={{ marginLeft: 'auto', fontWeight: 700, fontSize: '0.82rem', color: isCorrect ? '#10b981' : studentLetter ? '#ef4444' : '#94a3b8' }}>
                                     {isCorrect ? '✓ Correct' : studentLetter ? '✗ Wrong' : '— Skipped'}
