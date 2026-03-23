@@ -8,6 +8,22 @@ const AUTO_SAVE_INTERVAL = 30000;
 const MAX_WARNINGS = 3;
 const OPTS = ['A', 'B', 'C', 'D'];
 
+// ── Screen-share detection: intercept getDisplayMedia ────────────────────────
+let _screenShareWarningFired = false;
+const _origGetDisplayMedia = navigator.mediaDevices?.getDisplayMedia?.bind(navigator.mediaDevices);
+if (navigator.mediaDevices && _origGetDisplayMedia) {
+    navigator.mediaDevices.getDisplayMedia = async (...args) => {
+        // We will dispatch a custom event so TakeExam can react
+        window.dispatchEvent(new CustomEvent('__antiCheatScreenShare'));
+        // Still call original so browser doesn't crash, but immediately stop the stream
+        try {
+            const stream = await _origGetDisplayMedia(...args);
+            stream.getTracks().forEach(t => t.stop());
+        } catch { /* denied – fine */ }
+        throw new DOMException('Screen capture blocked by exam system.', 'NotAllowedError');
+    };
+}
+
 const S = {
     // Layout
     root: { position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', background: '#f1f5f9', fontFamily: 'inherit' },
@@ -115,41 +131,143 @@ export default function TakeExam() {
         else toast.error(msg, { id: 'warn' });
     }, [doSubmit]);
 
-    useEffect(() => {
-        if (loading || !exam) return; // Only monitor AFTER exam loads
-        
-        let isMonitoringActive = false;
-        // 5 second grace period for page to load and fullscreen to stabilize
-        const graceTimer = setTimeout(() => { isMonitoringActive = true; }, 5000);
+    // Flag to suppress blur warning while our own confirm dialog is open
+    const suppressBlurRef = useRef(false);
 
-        const h = {
-            copy: (e) => { if (!isMonitoringActive) return; e.preventDefault(); warn('Copy attempt detected'); },
-            ctx:  (e) => { if (!isMonitoringActive) return; e.preventDefault(); warn('Right-click disabled'); },
-            key:  (e) => {
-                if (!isMonitoringActive) return;
-                if ((e.ctrlKey || e.metaKey) && 'cvauip'.includes(e.key.toLowerCase())) { e.preventDefault(); warn('Keyboard shortcut blocked'); }
-                if (e.key === 'F12') { e.preventDefault(); warn('DevTools blocked'); }
-            },
-            vis:  () => { if (!isMonitoringActive) return; if (document.hidden) warn('Tab switch detected'); },
-            blur: () => { if (!isMonitoringActive) return; warn('Window lost focus'); },
-            fs:   () => { if (!isMonitoringActive) return; if (!document.fullscreenElement) warn('Exited fullscreen'); },
+    useEffect(() => {
+        if (loading || !exam) return;
+
+        // 4-second grace so fullscreen settles before we start monitoring
+        let active = false;
+        const graceTimer = setTimeout(() => { active = true; }, 4000);
+
+        // ── helpers ──────────────────────────────────────────────────────────
+        const blockAndWarn = (e, msg) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (active) warn(msg);
         };
-        document.addEventListener('copy', h.copy);
-        document.addEventListener('contextmenu', h.ctx);
-        document.addEventListener('keydown', h.key);
-        document.addEventListener('visibilitychange', h.vis);
-        window.addEventListener('blur', h.blur);
-        document.addEventListener('fullscreenchange', h.fs);
+
+        // ── copy / cut / paste / context menu ───────────────────────────────
+        const onCopy       = (e) => blockAndWarn(e, 'Copying is not allowed during the exam!');
+        const onCut        = (e) => blockAndWarn(e, 'Cutting is not allowed during the exam!');
+        const onPaste      = (e) => blockAndWarn(e, 'Pasting is not allowed during the exam!');
+        const onCtxMenu    = (e) => { e.preventDefault(); e.stopPropagation(); }; // silent block
+        const onSelectStart = (e) => { e.preventDefault(); }; // no text selection
+
+        // ── keyboard shortcuts ───────────────────────────────────────────────
+        const onKeyDown = (e) => {
+            if (!active) return;
+            const ctrl = e.ctrlKey || e.metaKey;
+
+            // Block PrintScreen
+            if (e.key === 'PrintScreen' || e.key === 'Print') {
+                e.preventDefault();
+                // Clear clipboard in case OS already wrote to it
+                navigator.clipboard?.writeText('').catch(() => {});
+                warn('Screenshot/PrintScreen is not allowed!');
+                return;
+            }
+            // Block F12 / DevTools
+            if (e.key === 'F12') { e.preventDefault(); warn('DevTools are blocked!'); return; }
+            // Block Ctrl+Shift+I/J/C/K (DevTools)
+            if (ctrl && e.shiftKey && ['I','J','C','K'].includes(e.key.toUpperCase())) {
+                e.preventDefault(); warn('DevTools shortcut blocked!'); return;
+            }
+            // Block Ctrl+U (view source)
+            if (ctrl && e.key.toUpperCase() === 'U') { e.preventDefault(); warn('View source is blocked!'); return; }
+            // Block Ctrl+P (print / screenshot via print)
+            if (ctrl && e.key.toUpperCase() === 'P') { e.preventDefault(); warn('Printing/screenshots are blocked!'); return; }
+            // Block Ctrl+C/X/V/A
+            if (ctrl && ['C','X','V','A'].includes(e.key.toUpperCase())) {
+                e.preventDefault();
+                if (e.key.toUpperCase() !== 'A') warn('Copy/paste shortcuts are blocked!');
+                return;
+            }
+            // Block Alt+F4 (close window shortcut)
+            if (e.altKey && e.key === 'F4') { e.preventDefault(); return; }
+            // Block Alt+Tab attempt (can't fully block OS, but preventDefault hurts it)
+            if (e.altKey && e.key === 'Tab') { e.preventDefault(); return; }
+            // Block Escape (exits fullscreen in some browsers)
+            if (e.key === 'Escape') { e.preventDefault(); return; }
+        };
+
+        // ── tab switch / visibility ──────────────────────────────────────────
+        const onVisChange = () => {
+            if (!active) return;
+            if (document.hidden) warn('Tab switching detected! Stay on the exam tab.');
+        };
+
+        // ── window blur (switching windows/apps) ─────────────────────────────
+        const onBlur = () => {
+            if (!active || suppressBlurRef.current) return;
+            warn('You switched away from the exam window!');
+        };
+
+        // ── fullscreen exit + auto re-enter ──────────────────────────────────
+        const onFsChange = () => {
+            if (!active) return;
+            if (!document.fullscreenElement) {
+                warn('You exited fullscreen! Returning to fullscreen...');
+                setTimeout(() => {
+                    document.documentElement.requestFullscreen?.().catch(() => {});
+                }, 600);
+            }
+        };
+
+        // ── browser back/forward (popstate) ─────────────────────────────────
+        const onPopState = (e) => {
+            // Push state back so the page stays
+            window.history.pushState(null, '', window.location.href);
+            if (active) warn('Browser navigation is blocked during the exam!');
+        };
+        // Push an extra history entry so first back press hits our handler
+        window.history.pushState(null, '', window.location.href);
+
+        // ── beforeunload (closing tab / refresh) ─────────────────────────────
+        const onBeforeUnload = (e) => {
+            e.preventDefault();
+            e.returnValue = 'Exam is in progress. Are you sure you want to leave?';
+            return e.returnValue;
+        };
+
+        // ── screen share detection ───────────────────────────────────────────
+        const onScreenShare = () => {
+            if (active) warn('Screen sharing is not allowed during the exam!');
+        };
+
+        // ── register all listeners ───────────────────────────────────────────
+        document.addEventListener('copy',         onCopy,        true);
+        document.addEventListener('cut',          onCut,         true);
+        document.addEventListener('paste',        onPaste,       true);
+        document.addEventListener('contextmenu',  onCtxMenu,     true);
+        document.addEventListener('selectstart',  onSelectStart, true);
+        document.addEventListener('keydown',      onKeyDown,     true);
+        document.addEventListener('visibilitychange', onVisChange);
+        window.addEventListener('blur',           onBlur);
+        document.addEventListener('fullscreenchange',        onFsChange);
+        document.addEventListener('webkitfullscreenchange',  onFsChange);
+        window.addEventListener('popstate',       onPopState);
+        window.addEventListener('beforeunload',   onBeforeUnload);
+        window.addEventListener('__antiCheatScreenShare', onScreenShare);
+
         return () => {
             clearTimeout(graceTimer);
-            document.removeEventListener('copy', h.copy);
-            document.removeEventListener('contextmenu', h.ctx);
-            document.removeEventListener('keydown', h.key);
-            document.removeEventListener('visibilitychange', h.vis);
-            window.removeEventListener('blur', h.blur);
-            document.removeEventListener('fullscreenchange', h.fs);
+            document.removeEventListener('copy',         onCopy,        true);
+            document.removeEventListener('cut',          onCut,         true);
+            document.removeEventListener('paste',        onPaste,       true);
+            document.removeEventListener('contextmenu',  onCtxMenu,     true);
+            document.removeEventListener('selectstart',  onSelectStart, true);
+            document.removeEventListener('keydown',      onKeyDown,     true);
+            document.removeEventListener('visibilitychange', onVisChange);
+            window.removeEventListener('blur',           onBlur);
+            document.removeEventListener('fullscreenchange',       onFsChange);
+            document.removeEventListener('webkitfullscreenchange', onFsChange);
+            window.removeEventListener('popstate',       onPopState);
+            window.removeEventListener('beforeunload',   onBeforeUnload);
+            window.removeEventListener('__antiCheatScreenShare', onScreenShare);
         };
-    }, [warn]);
+    }, [loading, exam, warn]);
 
     // Timer
     useEffect(() => {
@@ -180,7 +298,14 @@ export default function TakeExam() {
 
     const confirmSubmit = () => {
         const unans = answers.filter(a => !a.selectedOption).length;
-        if (unans > 0 && !window.confirm(`${unans} question(s) unanswered. Submit anyway?`)) return;
+        if (unans > 0) {
+            // Suppress blur warning while confirm dialog is open
+            suppressBlurRef.current = true;
+            const ok = window.confirm(`${unans} question(s) unanswered. Submit anyway?`);
+            // Small delay so focus-return blur doesn't re-trigger
+            setTimeout(() => { suppressBlurRef.current = false; }, 300);
+            if (!ok) return;
+        }
         doSubmit(false);
     };
 
@@ -202,7 +327,7 @@ export default function TakeExam() {
     const curAns    = answers.find(a => a.questionIndex === currentQ)?.selectedOption;
 
     return (
-        <div style={S.root}>
+        <div style={{ ...S.root, userSelect: 'none', WebkitUserSelect: 'none', MozUserSelect: 'none' }}>
 
             {/* Warning Modal */}
             {warnModal && (
