@@ -3,8 +3,9 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { AlertTriangle, Clock, Shield, ShieldAlert, ChevronLeft, ChevronRight, Send, RotateCcw, CheckCircle2 } from 'lucide-react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../../components/ConfirmModal';
 
-const AUTO_SAVE_INTERVAL = 30000;
+const AUTO_SAVE_INTERVAL = 15000;
 const MAX_WARNINGS = 3;
 const OPTS = ['A', 'B', 'C', 'D'];
 
@@ -41,10 +42,15 @@ export default function TakeExam() {
     const { id } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
+    const confirm = useConfirm();
     // Persist testCode in sessionStorage so refresh doesn't break it
+    const [storedToken] = useState(() => location.state?.rejoinToken || null);
     const [storedCode] = useState(() => {
-        const code = location.state?.testCode || sessionStorage.getItem(`testCode_${id}`);
-        if (code) sessionStorage.setItem(`testCode_${id}`, code);
+        const code = location.state?.testCode || sessionStorage.getItem(`testCode_${id}`) || localStorage.getItem(`exam_code_${id}`);
+        if (code) {
+            sessionStorage.setItem(`testCode_${id}`, code);
+            localStorage.setItem(`exam_code_${id}`, code);
+        }
         return code;
     });
 
@@ -73,7 +79,10 @@ export default function TakeExam() {
     useEffect(() => {
         (async () => {
             try {
-                const { data } = await api.post(`/student-exam/exams/${id}/start`, { testCode: storedCode });
+                const { data } = await api.post(`/student-exam/exams/${id}/start`, {
+                    testCode: storedCode,
+                    rejoinToken: storedToken
+                });
                 console.log('=== EXAM DATA ===', JSON.stringify(data.exam?.questions?.slice(0,2)));
                 setExam(data.exam);
                 setTimeLeft(data.progress.timeLeftSeconds);
@@ -86,12 +95,20 @@ export default function TakeExam() {
                 } else {
                     setAnswers(Array.from({ length: qCount }, (_, i) => ({ questionIndex: i, selectedOption: null })));
                 }
-            } catch (e) {
-                toast.error(e.response?.data?.message || 'Failed to start exam');
-                navigate('/active-exams');
-            } finally { setLoading(false); }
+            } catch (err) {
+                console.error(err);
+                const msg = err.response?.data?.message || 'Failed to start exam';
+                toast.error(msg);
+                if (err.response?.status === 403) {
+                    setViolationMsg(msg);
+                } else {
+                    navigate('/active-exams');
+                }
+            } finally {
+                setLoading(false);
+            }
         })();
-    }, [id]);
+    }, [id, storedCode, storedToken, navigate]);
 
     // Fullscreen
     useEffect(() => {
@@ -111,6 +128,7 @@ export default function TakeExam() {
             document.exitFullscreen?.().catch(() => {});
             const timeTaken = Math.round((Date.now() - startRef.current) / 1000);
             const { data } = await api.post(`/student-exam/exams/${id}/submit`, { answers: answersRef.current, timeTaken, autoSubmitted: auto });
+            localStorage.removeItem(`exam_code_${id}`);
             toast.success(auto ? 'Auto-submitted!' : 'Exam submitted!');
             navigate(`/result/${data.resultId}`, { replace: true });
         } catch {
@@ -296,14 +314,16 @@ export default function TakeExam() {
 
     const selectAnswer = (qi, letter) => setAnswers(p => p.map(a => a.questionIndex === qi ? { ...a, selectedOption: letter } : a));
 
-    const confirmSubmit = () => {
+    const confirmSubmit = async () => {
         const unans = answers.filter(a => !a.selectedOption).length;
         if (unans > 0) {
-            // Suppress blur warning while confirm dialog is open
             suppressBlurRef.current = true;
-            const ok = window.confirm(`${unans} question(s) unanswered. Submit anyway?`);
-            // Small delay so focus-return blur doesn't re-trigger
-            setTimeout(() => { suppressBlurRef.current = false; }, 300);
+            let ok = false;
+            try {
+                ok = await confirm(`${unans} question(s) unanswered. Submit anyway?`, { title: 'Submit Exam?', confirmLabel: 'Submit', variant: 'info' });
+            } finally {
+                setTimeout(() => { suppressBlurRef.current = false; }, 300);
+            }
             if (!ok) return;
         }
         doSubmit(false);

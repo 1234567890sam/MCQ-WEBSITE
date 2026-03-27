@@ -1,4 +1,5 @@
 const ExamSession = require('../models/ExamSession');
+const StudentExamProgress = require('../models/StudentExamProgress');
 const Attempt = require('../models/Attempt');
 const User = require('../models/User');
 const Question = require('../models/Question');
@@ -114,6 +115,27 @@ const deleteQuestion = async (req, res) => {
         });
 
         res.json({ success: true, message: 'Question deleted' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/** DELETE /api/teacher/questions/by-subject?subject=X */
+const deleteQuestionsBySubject = async (req, res) => {
+    try {
+        const { subject } = req.query;
+        if (!subject) return res.status(400).json({ success: false, message: 'Subject is required' });
+        const result = await Question.updateMany(
+            { collegeId: req.user.collegeId, subject, isDeleted: false },
+            { isDeleted: true, deletedAt: new Date() }
+        );
+        await logAction({
+            userId: req.user._id,
+            action: 'DELETE',
+            targetModel: 'Question',
+            details: `Bulk deleted ${result.modifiedCount} questions from subject "${subject}"`
+        });
+        res.json({ success: true, message: `${result.modifiedCount} questions deleted from subject "${subject}"`, deletedCount: result.modifiedCount });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });
     }
@@ -255,9 +277,13 @@ const getExamById = async (req, res) => {
     try {
         const exam = await ExamSession.findOne({
             _id: req.params.id, createdBy: req.user._id, isDeleted: false
-        }).populate('allowedStudents', 'name email studentId').lean();
+        }).populate('allowedStudents', 'name email studentId department semester').lean();
         if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
-        res.json({ success: true, exam });
+
+        // Also fetch progress for all students in this exam
+        const progressList = await StudentExamProgress.find({ examSessionId: req.params.id }).lean();
+        
+        res.json({ success: true, exam, progress: progressList });
     } catch (e) { res.status(500).json({ success: false, message: 'Server error' }); }
 };
 
@@ -817,9 +843,40 @@ const downloadExamTestCodeExcel = async (req, res) => {
     }
 };
 
+/** PATCH /api/teacher/exams/:id/students/:studentId/allow-rejoin */
+const allowStudentRejoin = async (req, res) => {
+    try {
+        const { id, studentId } = req.params;
+        // Assuming StudentExamProgress and logAction are imported or defined elsewhere
+        const StudentExamProgress = require('../models/StudentExamProgress'); // Assuming path
+        const logAction = require('../utils/logAction'); // Assuming path
+
+        const progress = await StudentExamProgress.findOne({ examSessionId: id, studentId });
+        if (!progress) return res.status(404).json({ success: false, message: 'No progress found for this student' });
+
+        progress.rejoinCount = 0;
+        progress.status = 'in-progress';
+        progress.rejoinToken = null;
+        await progress.save();
+
+        await logAction({
+            userId: req.user._id,
+            action: 'UPDATE',
+            targetModel: 'StudentExamProgress',
+            targetId: progress._id,
+            details: `Allowed rejoin for student ${studentId} in exam ${id}`
+        });
+
+        res.json({ success: true, message: 'Student allowed to rejoin. Rejoin count reset.' });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 module.exports = {
     // Question Bank
-    uploadQuestions, getQuestions, updateQuestion, deleteQuestion,
+    uploadQuestions, getQuestions, updateQuestion, deleteQuestion, deleteQuestionsBySubject,
     // Exams
     getMyExams, createExam, updateExam, deleteExam, getExamById,
     // Exam Students
@@ -832,4 +889,6 @@ module.exports = {
     getExamResults, getExamAnalytics, getGeneralAnalytics, exportAllResults, exportExamResults,
     // Attempt Management
     getAttemptDetails, updateAttemptAnswer,
+    // Student Exam Progress Management
+    allowStudentRejoin,
 };

@@ -5,11 +5,13 @@ import toast from 'react-hot-toast';
 import { Clock, PlayCircle, ChevronLeft, ChevronRight, Send, AlertTriangle, Shield, ShieldAlert, KeyRound, ArrowRight } from 'lucide-react';
 import useAntiCheat from '../../hooks/useAntiCheat';
 import { useAuth } from '../../context/AuthContext';
+import { useConfirm } from '../../components/ConfirmModal';
 
 export default function ExamPage() {
     const { isExamStudent } = useAuth();
     const { setHideNav } = useOutletContext() || {};
     const navigate = useNavigate();
+    const confirm = useConfirm();
     const [subjects, setSubjects] = useState([]);
     const [config, setConfig] = useState({ subject: 'All', count: 70, duration: 30, negativeMarking: false });
     const [questions, setQuestions] = useState([]);
@@ -176,10 +178,10 @@ export default function ExamPage() {
         } finally { setLoading(false); }
     };
 
-    const handleSubmitClick = () => {
+    const handleSubmitClick = async () => {
         const unanswered = questions.filter((q) => !answers[q._id]).length;
         if (unanswered > 0) {
-            if (!window.confirm(`You have ${unanswered} unanswered question(s). Submit anyway?`)) return;
+            if (!await confirm(`You have ${unanswered} unanswered question(s). Submit anyway?`, { title: 'Submit Exam?', confirmLabel: 'Submit', variant: 'info' })) return;
         }
         submitExam(questions, answers, startTime);
     };

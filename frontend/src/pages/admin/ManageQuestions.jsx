@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../../components/ConfirmModal';
 import { Search, Plus, Edit2, Trash2, Check, X, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function ManageQuestions() {
     const [questions, setQuestions] = useState([]);
+    const confirm = useConfirm();
     const [subjects, setSubjects] = useState([]);
     const [subjectCounts, setSubjectCounts] = useState([]);
     const [filter, setFilter] = useState({ subject: '', search: '' });
@@ -50,7 +52,7 @@ export default function ManageQuestions() {
     };
 
     const deleteQ = async (id) => {
-        if (!window.confirm('Delete this question?')) return;
+        if (!await confirm('This question will be permanently deleted.', { title: 'Delete Question?', variant: 'danger', confirmLabel: 'Delete' })) return;
         try {
             await api.delete(`/admin/questions/${id}`);
             toast.success('Deleted');
@@ -62,7 +64,7 @@ export default function ManageQuestions() {
     const deleteSubject = async (subject) => {
         const countObj = subjectCounts.find(s => s._id === subject);
         const count = countObj ? countObj.count : 'all';
-        if (!window.confirm(`Are you sure you want to delete ${count} questions of subject "${subject}"? This action cannot be undone.`)) return;
+        if (!await confirm(`All ${count} questions in "${subject}" will be permanently deleted. This action cannot be undone.`, { title: `Delete Subject "${subject}"?`, variant: 'danger', confirmLabel: 'Delete All' })) return;
         
         try {
             await api.delete(`/admin/questions/subject/${subject}`);

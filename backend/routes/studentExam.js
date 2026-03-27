@@ -10,6 +10,7 @@ router.get('/exams/active', ...isStudent, ctrl.getActiveExams);
 
 // Exam lifecycle
 router.post('/exams/:id/start', ...isStudent, ctrl.startExam);
+router.post('/exams/:id/request-rejoin', ...isStudent, ctrl.requestRejoin);
 router.get('/exams/:id/resume', ...isStudent, ctrl.resumeExam);
 router.put('/exams/:id/save-progress', ...isStudent, ctrl.saveProgress);
 router.post('/exams/:id/submit', ...isStudent, ctrl.submitExam);

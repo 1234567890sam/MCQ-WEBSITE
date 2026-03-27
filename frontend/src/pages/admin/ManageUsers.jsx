@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../../components/ConfirmModal';
 import { Search, Shield, UserCheck, UserX, ChevronLeft, ChevronRight, BarChart2, X } from 'lucide-react';
 
 export default function ManageUsers() {
     const [users, setUsers] = useState([]);
+    const confirm = useConfirm();
     const [search, setSearch] = useState('');
     const [pagination, setPagination] = useState({ page: 1, total: 0, pages: 1 });
     const [loading, setLoading] = useState(true);
@@ -25,7 +27,7 @@ export default function ManageUsers() {
 
     const toggleRole = async (user) => {
         const newRole = user.role === 'admin' ? 'student' : 'admin';
-        if (!window.confirm(`Change ${user.name} to ${newRole}?`)) return;
+        if (!await confirm(`Change "${user.name}" role to ${newRole}?`, { title: 'Change Role?', variant: 'info', confirmLabel: 'Change' })) return;
         try {
             await api.patch(`/admin/users/${user._id}/role`, { role: newRole });
             toast.success('Role updated');
@@ -34,7 +36,8 @@ export default function ManageUsers() {
     };
 
     const toggleActive = async (user) => {
-        if (!window.confirm(`${user.isActive ? 'Deactivate' : 'Activate'} ${user.name}?`)) return;
+        const action = user.isActive ? 'Deactivate' : 'Activate';
+        if (!await confirm(`${action} the account for "${user.name}"?`, { title: `${action} User?`, variant: user.isActive ? 'danger' : 'info', confirmLabel: action })) return;
         try {
             await api.patch(`/admin/users/${user._id}/toggle`);
             toast.success('Status updated');

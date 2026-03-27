@@ -9,6 +9,7 @@ export default function ExamStudents() {
     const navigate = useNavigate();
     const [exam, setExam] = useState(null);
     const [allStudents, setAllStudents] = useState([]);
+    const [progressMap, setProgressMap] = useState({});
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
 
@@ -20,6 +21,13 @@ export default function ExamStudents() {
             ]);
             setExam(examRes.data.exam);
             setAllStudents(studRes.data.students);
+            
+            // Map progress by studentId
+            const pMap = {};
+            (examRes.data.progress || []).forEach(p => {
+                pMap[String(p.studentId)] = p;
+            });
+            setProgressMap(pMap);
         } catch (e) { console.error(e); }
         setLoading(false);
     };
@@ -47,6 +55,14 @@ export default function ExamStudents() {
             toast.success(`Added ${notAdded.length} students`);
             fetchData();
         } catch { toast.error('Failed to add all'); }
+    };
+
+    const handleAllowRejoin = async (studentId) => {
+        try {
+            await api.patch(`/teacher/exams/${id}/students/${studentId}/allow-rejoin`);
+            toast.success('Rejoin allowed');
+            fetchData();
+        } catch { toast.error('Failed to allow rejoin'); }
     };
 
     const filtered = allStudents.filter(s =>
@@ -84,14 +100,15 @@ export default function ExamStudents() {
                             <tr>
                                 <th>Student Details</th>
                                 <th>Department / Sem</th>
+                                <th>Exam Status</th>
                                 <th style={{ textAlign: 'right' }}>Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan="3" style={{ textAlign: 'center', padding: '3rem' }}><div className="spinner" /></td></tr>
+                                <tr><td colSpan="4" style={{ textAlign: 'center', padding: '3rem' }}><div className="spinner" /></td></tr>
                             ) : filtered.length === 0 ? (
-                                <tr><td colSpan="3" style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>No students found</td></tr>
+                                <tr><td colSpan="4" style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>No students found</td></tr>
                             ) : filtered.map(s => {
                                 const added = allowedIds.has(s._id);
                                 return (
@@ -104,7 +121,33 @@ export default function ExamStudents() {
                                             <div style={{ fontSize: '0.8rem' }}>{s.department || 'N/A'}</div>
                                             <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Semester: {s.semester || 'N/A'}</div>
                                         </td>
-                                        <td style={{ textAlign: 'right' }}>
+                                        <td>
+                                            {added && (
+                                                progressMap[s._id] ? (
+                                                    <div>
+                                                        <div style={{ 
+                                                            fontSize: '0.75rem', 
+                                                            fontWeight: 700, 
+                                                            color: progressMap[s._id].status === 'blocked' ? '#ef4444' : '#6366f1',
+                                                            textTransform: 'capitalize'
+                                                        }}>
+                                                            {progressMap[s._id].status.replace('-', ' ')}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                                                            Rejoins: {progressMap[s._id].rejoinCount || 0} / 2
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ fontSize: '0.75rem', color: '#94a3b8 italic' }}>Not Started</div>
+                                                )
+                                            )}
+                                        </td>
+                                        <td style={{ textAlign: 'right', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                            {added && progressMap[s._id] && (progressMap[s._id].rejoinCount > 0 || progressMap[s._id].status === 'blocked') && (
+                                                <button onClick={() => handleAllowRejoin(s._id)} className="btn-secondary" style={{ fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: '#fef3c7', color: '#92400e', borderColor: '#fde68a' }}>
+                                                    Allow Rejoin
+                                                </button>
+                                            )}
                                             <button onClick={() => handleToggle(s._id, !added)} className={added ? "btn-danger" : "btn-secondary"} style={{ fontSize: '0.75rem', padding: '0.4rem 0.8rem' }}>
                                                 {added ? 'Remove' : 'Add Student'}
                                             </button>

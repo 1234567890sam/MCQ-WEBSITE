@@ -20,7 +20,27 @@ export default function ActiveExams() {
             .finally(() => setLoading(false));
     }, []);
 
+    const handleResume = async (exam) => {
+        if (exam.progress?.status === 'blocked' || (exam.progress?.rejoinCount || 0) >= 2) {
+            return toast.error('Exam blocked. Please contact your teacher.');
+        }
+
+        setRejoining(true);
+        try {
+            const { data } = await api.post(`/student-exam/exams/${exam._id}/request-rejoin`);
+            navigate(`/take-exam/${exam._id}`, { state: { testCode: localStorage.getItem(`exam_code_${exam._id}`) || '', rejoinToken: data.token } });
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to request rejoin');
+        } finally {
+            setRejoining(false);
+        }
+    };
+
     const handleStartClick = (exam) => {
+        if (exam.canResume) {
+            handleResume(exam);
+            return;
+        }
         setSelectedExam(exam);
         setTestCode('');
         setShowCodeModal(true);
@@ -28,8 +48,10 @@ export default function ActiveExams() {
 
     const handleConfirmStart = () => {
         if (!testCode.trim()) return toast.error('Please enter the test code');
+        const code = testCode.trim();
+        localStorage.setItem(`exam_code_${selectedExam._id}`, code);
         setShowCodeModal(false);
-        navigate(`/take-exam/${selectedExam._id}`, { state: { testCode: testCode.trim() } });
+        navigate(`/take-exam/${selectedExam._id}`, { state: { testCode: code } });
     };
 
     return (
@@ -130,7 +152,7 @@ export default function ActiveExams() {
                                 </div>
 
                                 {/* Action Button */}
-                                <div style={{ flexShrink: 0 }}>
+                                 <div style={{ flexShrink: 0 }}>
                                     {exam.alreadySubmitted ? (
                                         <span style={{
                                             display: 'flex', alignItems: 'center', gap: '0.4rem',
@@ -140,13 +162,23 @@ export default function ActiveExams() {
                                         }}>
                                             <CheckCircle size={16} /> Submitted
                                         </span>
+                                    ) : (exam.progress?.status === 'blocked' || (exam.progress?.rejoinCount || 0) >= 2) ? (
+                                        <span style={{
+                                            display: 'flex', alignItems: 'center', gap: '0.4rem',
+                                            fontSize: '0.82rem', fontWeight: 700, color: '#ef4444',
+                                            background: 'rgba(239,68,68,0.1)', padding: '0.55rem 1rem',
+                                            borderRadius: '0.75rem', border: '1px solid rgba(239,68,68,0.25)'
+                                        }}>
+                                            <RotateCcw size={16} /> Blocked - Contact Teacher
+                                        </span>
                                     ) : exam.canResume ? (
                                         <button
                                             onClick={() => handleStartClick(exam)}
+                                            disabled={rejoining}
                                             className="btn-primary"
                                             style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
                                         >
-                                            <RotateCcw size={16} /> Resume Exam
+                                            <RotateCcw size={16} /> {rejoining ? 'Resuming...' : 'Resume Exam'}
                                         </button>
                                     ) : (
                                         <button

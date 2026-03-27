@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../../components/ConfirmModal';
 import { Plus, BookOpen, Users, ToggleLeft, ToggleRight, Eye, Download, Trash2, Shield, ShieldCheck, FileSpreadsheet, X, Clock, Search, ChevronRight, ChevronDown } from 'lucide-react';
 
 export default function ManageExamSessions() {
     const [sessions, setSessions] = useState([]);
+    const confirm = useConfirm();
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
     const [showForm, setShowForm] = useState(false);
@@ -112,7 +114,7 @@ export default function ManageExamSessions() {
     };
 
     const deleteSession = async (id) => {
-        if (!window.confirm('Delete this exam session? This cannot be undone.')) return;
+        if (!await confirm('This exam session and all its data will be permanently deleted.', { title: 'Delete Exam Session?', variant: 'danger', confirmLabel: 'Delete' })) return;
         try {
             await api.delete(`/admin/exam-sessions/${id}`);
             toast.success('Session deleted');

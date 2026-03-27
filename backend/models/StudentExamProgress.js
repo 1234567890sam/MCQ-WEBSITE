@@ -37,12 +37,24 @@ const studentExamProgressSchema = new mongoose.Schema(
             default: 0,
             max: 3,
         },
+        rejoinCount: {
+            type: Number,
+            default: 0,
+        },
+        rejoinToken: {
+            type: String,
+            default: null,
+        },
         status: {
             type: String,
-            enum: ['in-progress', 'submitted', 'auto-submitted'],
+            enum: ['in-progress', 'submitted', 'auto-submitted', 'blocked'],
             default: 'in-progress',
         },
         startedAt: {
+            type: Date,
+            default: Date.now,
+        },
+        lastActiveAt: {
             type: Date,
             default: Date.now,
         },
@@ -53,6 +65,10 @@ const studentExamProgressSchema = new mongoose.Schema(
         submittedAt: {
             type: Date,
             default: null,
+        },
+        expiresAt: {
+            type: Date,
+            required: true,
         },
     },
     { timestamps: true }

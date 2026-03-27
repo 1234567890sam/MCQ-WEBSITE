@@ -2,10 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
-import { Search, Plus, Edit2, Trash2, Check, X, Filter, ChevronLeft, ChevronRight, BookOpen, Upload } from 'lucide-react';
+import { useConfirm } from '../../components/ConfirmModal';
+import { Search, Edit2, Trash2, Check, X, Filter, ChevronLeft, ChevronRight, BookOpen, Upload, AlertTriangle } from 'lucide-react';
 
 export default function ManageQuestions() {
     const navigate = useNavigate();
+    const confirm = useConfirm();
     const [questions, setQuestions] = useState([]);
     const [subjects, setSubjects] = useState([]);
     const [subjectCounts, setSubjectCounts] = useState([]);
@@ -52,11 +54,23 @@ export default function ManageQuestions() {
     };
 
     const deleteQ = async (id) => {
-        if (!window.confirm('Delete this question?')) return;
+        if (!await confirm('This question will be permanently deleted.', { title: 'Delete Question?', variant: 'danger', confirmLabel: 'Delete' })) return;
         try {
             await api.delete(`/college-admin/questions/${id}`);
             toast.success('Deleted');
             fetchQuestions(pagination.page);
+            api.get('/college-admin/subjects').then(({ data }) => { setSubjects(data.subjects); if (data.subjectCounts) setSubjectCounts(data.subjectCounts); });
+        } catch { toast.error('Delete failed'); }
+    };
+
+    const deleteQsBySubject = async () => {
+        if (!filter.subject) return;
+        const count = subjectCounts.find(c => c._id === filter.subject)?.count || 0;
+        if (!await confirm(`All ${count} questions in "${filter.subject}" will be permanently deleted. This action cannot be undone.`, { title: `Delete All in "${filter.subject}"?`, variant: 'danger', confirmLabel: 'Delete All' })) return;
+        try {
+            const { data } = await api.delete('/college-admin/questions/by-subject', { params: { subject: filter.subject } });
+            toast.success(data.message || 'Subject questions deleted');
+            setFilter({ subject: '', search: '' });
             api.get('/college-admin/subjects').then(({ data }) => { setSubjects(data.subjects); if (data.subjectCounts) setSubjectCounts(data.subjectCounts); });
         } catch { toast.error('Delete failed'); }
     };
@@ -103,6 +117,15 @@ export default function ManageQuestions() {
                     <button className="btn-secondary" onClick={() => setFilter({ subject: '', search: '' })} style={{ justifyContent: 'center' }}>
                         <Filter size={15} /> Clear
                     </button>
+                    {filter.subject && (
+                        <button
+                            onClick={deleteQsBySubject}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center', background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '0.5rem', padding: '0.6rem 1rem', fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem', whiteSpace: 'nowrap' }}
+                            title={`Delete all questions in "${filter.subject}"`}
+                        >
+                            <AlertTriangle size={15} /> Delete All in "{filter.subject}"
+                        </button>
+                    )}
                 </div>
             </div>
 

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../../components/ConfirmModal';
 
 const ROLES = [
     { value: '', label: 'All Roles' },
@@ -29,6 +30,7 @@ const ROLES = [
 
 export default function GlobalUsers() {
     const [users, setUsers] = useState([]);
+    const confirm = useConfirm();
     const [colleges, setColleges] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -111,7 +113,7 @@ export default function GlobalUsers() {
     };
 
     const handleDeleteUser = async (user) => {
-        if (!window.confirm(`Are you sure you want to move ${user.name} to trash?`)) return;
+        if (!await confirm(`"${user.name}" will be moved to the trash.`, { title: 'Move User to Trash?', variant: 'danger', confirmLabel: 'Move to Trash' })) return;
         try {
             await api.delete(`/saas/users/${user._id}`);
             toast.success('User moved to trash');
@@ -122,7 +124,7 @@ export default function GlobalUsers() {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Move this user to trash?')) return;
+        if (!await confirm('This user will be moved to the trash.', { title: 'Move to Trash?', variant: 'danger', confirmLabel: 'Move to Trash' })) return;
         try {
             await api.delete(`/saas/users/${id}`);
             toast.success('User moved to trash');

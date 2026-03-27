@@ -16,9 +16,11 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../../components/ConfirmModal';
 
 export default function RecoveryPanel() {
     const [items, setItems] = useState([]);
+    const confirm = useConfirm();
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState('college'); // 'college', 'exam', 'question', 'result'
     const [searchTerm, setSearchTerm] = useState('');
@@ -53,7 +55,7 @@ export default function RecoveryPanel() {
     };
 
     const handleDeletePermanently = async (id) => {
-        if (!window.confirm(`CRITICAL: Permanently delete this ${tab}? This cannot be undone!`)) return;
+        if (!await confirm(`This ${tab} will be PERMANENTLY destroyed and cannot be recovered.`, { title: `Permanently Delete ${tab.charAt(0).toUpperCase() + tab.slice(1)}?`, variant: 'danger', confirmLabel: 'Delete Forever' })) return;
         try {
             await api.delete(`/saas/trash/${tab}/${id}`);
             toast.success(`${tab.charAt(0).toUpperCase() + tab.slice(1)} deleted forever`);

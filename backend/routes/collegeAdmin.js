@@ -31,6 +31,7 @@ router.delete('/exams/:id', ...isCollegeAdmin, ctrl.deleteCollegeExam);
 router.post('/upload-questions', ...isCollegeAdmin, upload.single('file'), ctrl.uploadQuestions);
 router.get('/questions', ...isCollegeAdmin, ctrl.getQuestions);
 router.put('/questions/:id', ...isCollegeAdmin, ctrl.updateQuestion);
+router.delete('/questions/by-subject', ...isCollegeAdmin, ctrl.deleteQuestionsBySubject);
 router.delete('/questions/:id', ...isCollegeAdmin, ctrl.deleteQuestion);
 router.get('/subjects', ...isCollegeAdmin, ctrl.getSubjects);
 

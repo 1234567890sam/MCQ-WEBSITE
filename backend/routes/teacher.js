@@ -13,6 +13,7 @@ router.get('/dashboard', ...isTeacher, ctrl.getDashboard);
 router.get('/questions', ...isTeacher, ctrl.getQuestions);
 router.post('/questions/upload', ...isTeacher, upload.single('file'), ctrl.uploadQuestions);
 router.put('/questions/:id', ...isTeacher, ctrl.updateQuestion);
+router.delete('/questions/by-subject', ...isTeacher, ctrl.deleteQuestionsBySubject);
 router.delete('/questions/:id', ...isTeacher, ctrl.deleteQuestion);
 
 router.post('/bulk-parse-questions', ...isTeacher, upload.single('file'), ctrl.bulkParseQuestions);
@@ -31,6 +32,7 @@ router.delete('/exams/:id', ...isTeacher, ctrl.deleteExam);
 
 // Student management on exam
 router.put('/exams/:id/students', ...isTeacher, ctrl.updateExamStudents);
+router.patch('/exams/:id/students/:studentId/allow-rejoin', ...isTeacher, ctrl.allowStudentRejoin);
 
 // Results & Analytics
 router.get('/analytics', ...isTeacher, ctrl.getGeneralAnalytics);

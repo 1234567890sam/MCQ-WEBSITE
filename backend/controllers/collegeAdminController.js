@@ -229,6 +229,21 @@ const deleteQuestion = async (req, res) => {
     }
 };
 
+/** DELETE /api/college/questions/by-subject?subject=X */
+const deleteQuestionsBySubject = async (req, res) => {
+    try {
+        const { subject } = req.query;
+        if (!subject) return res.status(400).json({ success: false, message: 'Subject is required' });
+        const result = await Question.updateMany(
+            { collegeId: req.user.collegeId, subject, isDeleted: false },
+            { isDeleted: true, deletedAt: new Date() }
+        );
+        res.json({ success: true, message: `${result.modifiedCount} questions deleted from subject "${subject}"`, deletedCount: result.modifiedCount });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 /** GET /api/college/subjects */
 const getSubjects = async (req, res) => {
     try {
@@ -903,7 +918,7 @@ module.exports = {
     bulkCreateStudents,
     downloadSampleExcel,
     // Migrated admin functions
-    uploadQuestions, getQuestions, updateQuestion, deleteQuestion, getSubjects,
+    uploadQuestions, getQuestions, updateQuestion, deleteQuestion, deleteQuestionsBySubject, getSubjects,
     createExamSession, getExamSessions, getExamSession, toggleSessionActive, 
     toggleSessionResults, getSessionResults, exportSessionResults, deleteExamSession,
     getEligibleStudents, downloadExamTestCodeExcel

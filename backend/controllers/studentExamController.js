@@ -2,6 +2,7 @@ const ExamSession = require('../models/ExamSession');
 const StudentExamProgress = require('../models/StudentExamProgress');
 const Attempt = require('../models/Attempt');
 const { getStudentTestCode } = require('../utils/testCodeHelper');
+const crypto = require('crypto');
 
 // ── Active Exams ──────────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ const getActiveExams = async (req, res) => {
 /** POST /api/student/exams/:id/start — create progress doc (idempotent) */
 const startExam = async (req, res) => {
     try {
-        const { testCode } = req.body;
+        const { testCode, rejoinToken } = req.body;
         const exam = await ExamSession.findOne({
             _id: req.params.id,
             isActive: true,
@@ -58,7 +59,52 @@ const startExam = async (req, res) => {
         });
         if (!exam) return res.status(404).json({ success: false, message: 'Exam not found or not allowed' });
 
-        // Verify Test Code if set (Only for students)
+        // Check if already submitted OR in-progress (Check this BEFORE test code verification to allow seamless resume)
+        const existing = await StudentExamProgress.findOne({ studentId: req.user._id, examSessionId: exam._id });
+        
+        if (existing?.status === 'submitted' || existing?.status === 'auto-submitted') {
+            return res.status(409).json({ success: false, message: 'You have already submitted this exam' });
+        }
+
+        if (existing?.status === 'blocked') {
+            return res.status(403).json({ success: false, message: 'Your exam is blocked due to multiple rejoin attempts. Please contact your teacher.' });
+        }
+
+        if (existing && existing.status === 'in-progress') {
+            // Recalculate timeLeft based on absolute expiry to prevent cheating (timer keeps running offline)
+            const remaining = Math.max(0, Math.floor((new Date(existing.expiresAt) - new Date()) / 1000));
+            
+            // If it's a resume but no token is provided (and it's not the first session), require a token
+            // Wait: The first start doesn't have a token. Any refresh/crash needs a token.
+            // On fresh start, existing is null. On resume, existing is present.
+            if (existing.rejoinCount > 0) {
+                if (!rejoinToken || rejoinToken !== existing.rejoinToken) {
+                    return res.status(403).json({ success: false, message: 'Invalid or missing rejoin token. Please request to rejoin from the dashboard.' });
+                }
+                // Token used! Clear it.
+                existing.rejoinToken = null;
+            }
+
+            existing.timeLeftSeconds = remaining;
+            existing.lastActiveAt = new Date();
+            await existing.save();
+
+            // Resume — map to plain objects to avoid Mongoose subdoc serialization issues
+            const safeQs = exam.questions.map((q) => ({
+                question: q.question,
+                options: q.options.map(o => String(o)),
+                subject: q.subject || '',
+                marks: q.marks || 1,
+            }));
+            return res.json({
+                success: true,
+                resumed: true,
+                progress: existing,
+                exam: { ...exam.toObject(), questions: safeQs },
+            });
+        }
+
+        // Fresh start verification: Verify Test Code if set (Only for students)
         if (exam.testCode && req.user.role === 'student') {
             const expectedCode = getStudentTestCode(String(req.user._id), String(exam._id), exam.testCode);
             const inputCode = testCode?.trim() || '';
@@ -68,30 +114,10 @@ const startExam = async (req, res) => {
             }
         }
 
-        // Check if already submitted
-        const existing = await StudentExamProgress.findOne({ studentId: req.user._id, examSessionId: exam._id });
-        if (existing?.status === 'submitted' || existing?.status === 'auto-submitted') {
-            return res.status(409).json({ success: false, message: 'You have already submitted this exam' });
-        }
-
-        if (existing && existing.status === 'in-progress') {
-            // Resume — map to plain objects to avoid Mongoose subdoc serialization issues
-            const safeQs = exam.questions.map((q) => ({
-                question: q.question,
-                options: q.options.map(o => String(o)),
-                subject: q.subject || '',
-                marks: q.marks || 1,
-            }));
-            console.log('[Resume] First question:', JSON.stringify(safeQs[0]));
-            return res.json({
-                success: true,
-                resumed: true,
-                progress: existing,
-                exam: { ...exam.toObject(), questions: safeQs },
-            });
-        }
-
         // Fresh start
+        const durationSeconds = exam.duration * 60;
+        const expiresAt = new Date(Date.now() + durationSeconds * 1000);
+
         let progress;
         try {
             progress = await StudentExamProgress.create({
@@ -99,8 +125,10 @@ const startExam = async (req, res) => {
                 examSessionId: exam._id,
                 collegeId: req.user.collegeId,
                 answers: [],
-                timeLeftSeconds: exam.duration * 60,
+                timeLeftSeconds: durationSeconds,
+                expiresAt,
                 warningCount: 0,
+                rejoinCount: 0,
                 status: 'in-progress',
             });
         } catch (err) {
@@ -177,6 +205,7 @@ const saveProgress = async (req, res) => {
                     answers: answers || [],
                     timeLeftSeconds: timeLeftSeconds ?? 0,
                     warningCount: warningCount ?? 0,
+                    lastActiveAt: new Date(),
                     lastSavedAt: new Date(),
                 },
             },
@@ -339,6 +368,6 @@ const getResultById = async (req, res) => {
 };
 
 module.exports = {
-    getActiveExams, startExam, resumeExam, saveProgress, submitExam,
+    getActiveExams, startExam, requestRejoin, resumeExam, saveProgress, submitExam,
     getMyResults, getResultById,
 };
