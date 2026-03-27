@@ -51,6 +51,7 @@ router.post('/recover/college/:id', ...isSaas, ctrl.recoverCollege);
 router.post('/recover/user/:id', ...isSaas, ctrl.recoverUser);
 router.post('/recover/exam/:id', ...isSaas, ctrl.recoverExam);
 router.post('/recover/question/:id', ...isSaas, ctrl.recoverQuestion);
+router.post('/recover/questions/bulk', ...isSaas, ctrl.bulkRecoverQuestions);
 router.post('/recover/result/:id', ...isSaas, ctrl.recoverResult);
 
 // Permanent Deletion

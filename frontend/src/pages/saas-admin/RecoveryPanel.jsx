@@ -20,19 +20,34 @@ import { useConfirm } from '../../components/ConfirmModal';
 
 export default function RecoveryPanel() {
     const [items, setItems] = useState([]);
+    const [colleges, setColleges] = useState([]);
     const confirm = useConfirm();
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState('college'); // 'college', 'exam', 'question', 'result'
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedCollege, setSelectedCollege] = useState('');
+    const [selectedSubject, setSelectedSubject] = useState('');
+
+    const fetchColleges = async () => {
+        try {
+            const { data } = await api.get('/saas/colleges');
+            setColleges(data.colleges || []);
+        } catch (error) { console.error('Failed to fetch colleges'); }
+    };
 
     const fetchTrash = async () => {
         setLoading(true);
         try {
-            // Mapping frontend tabs to backend plural trash routes
             let plural = tab === 'college' ? 'colleges' : tab + 's';
-            if (tab === 'user') plural = 'users'; // Explicit for users
+            if (tab === 'user') plural = 'users'; 
             
-            const { data } = await api.get(`/saas/trash/${plural}`);
+            const params = {
+                search: searchTerm,
+                collegeId: selectedCollege,
+                subject: selectedSubject
+            };
+
+            const { data } = await api.get(`/saas/trash/${plural}`, { params });
             setItems(data[plural] || []);
         } catch (error) {
             toast.error(`Failed to load deleted ${tab}s`);
@@ -42,7 +57,16 @@ export default function RecoveryPanel() {
         }
     };
 
-    useEffect(() => { fetchTrash(); }, [tab]);
+    useEffect(() => { fetchColleges(); }, []);
+    useEffect(() => { fetchTrash(); }, [tab, selectedCollege, selectedSubject]);
+
+    // Handle search debounce or manual trigger
+    useEffect(() => {
+        const delayDebounceFn = setTimeout(() => {
+            fetchTrash();
+        }, 500);
+        return () => clearTimeout(delayDebounceFn);
+    }, [searchTerm]);
 
     const handleRestore = async (id) => {
         try {
@@ -51,6 +75,26 @@ export default function RecoveryPanel() {
             fetchTrash();
         } catch (error) {
             toast.error('Restore operation failed');
+        }
+    };
+
+    const handleBulkRestore = async () => {
+        if (!await confirm(`Are you sure you want to restore all ${items.length} ${tab}s matching the current filters?`, { title: `Bulk Restore ${tab}s?` })) return;
+        
+        try {
+            if (tab === 'question') {
+                const { data } = await api.post('/saas/recover/questions/bulk', { 
+                    collegeId: selectedCollege,
+                    subject: selectedSubject,
+                    search: searchTerm
+                });
+                toast.success(data.message);
+                fetchTrash();
+            } else {
+                toast.error('Bulk restore is currently only supported for questions');
+            }
+        } catch (error) {
+            toast.error('Bulk restore failed');
         }
     };
 
@@ -94,6 +138,8 @@ export default function RecoveryPanel() {
         return name.toLowerCase().includes(search) || info.toLowerCase().includes(search);
     });
 
+    const subjects = tab === 'question' ? [...new Set(items.map(i => i.subject))].sort() : [];
+
     const TABS = [
         { id: 'college', label: 'Colleges', icon: School },
         { id: 'user', label: 'Users', icon: Users },
@@ -127,10 +173,40 @@ export default function RecoveryPanel() {
                 ))}
             </div>
 
-            {/* Search */}
-            <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
-                <Search size={16} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                <input className="input" placeholder={`Search in deleted ${tab}s...`} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ paddingLeft: '2.5rem' }} />
+            {/* Filters Row */}
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+                {/* Search */}
+                <div style={{ position: 'relative', flex: 1, minWidth: '250px' }}>
+                    <Search size={16} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                    <input className="input" placeholder={`Search in deleted ${tab}s...`} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ paddingLeft: '2.5rem' }} />
+                </div>
+
+                {/* College Filter */}
+                {tab !== 'college' && (
+                    <select className="input" value={selectedCollege} onChange={e => setSelectedCollege(e.target.value)} style={{ width: '200px' }}>
+                        <option value="">All Colleges</option>
+                        {colleges.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+                    </select>
+                )}
+
+                {/* Subject Filter (Questions only) */}
+                {tab === 'question' && (
+                    <select className="input" value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)} style={{ width: '200px' }}>
+                        <option value="">All Subjects</option>
+                        {subjects.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                )}
+
+                {/* Bulk Action */}
+                {tab === 'question' && items.length > 0 && (
+                    <button 
+                        onClick={handleBulkRestore}
+                        className="btn-primary" 
+                        style={{ background: '#10b981', borderColor: '#10b981', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                    >
+                        <RotateCcw size={16} /> Restore All Filtered ({items.length})
+                    </button>
+                )}
             </div>
 
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -147,9 +223,9 @@ export default function RecoveryPanel() {
                         <tbody>
                             {loading ? (
                                 <tr><td colSpan="4" style={{ textAlign: 'center', padding: '4rem' }}><div className="spinner" /></td></tr>
-                            ) : filteredItems.length === 0 ? (
-                                <tr><td colSpan="4" style={{ textAlign: 'center', padding: '4rem', color: '#64748b' }}>No {tab}s were found in the graveyard.</td></tr>
-                            ) : filteredItems.map(item => (
+                            ) : items.length === 0 ? (
+                                <tr><td colSpan="4" style={{ textAlign: 'center', padding: '4rem', color: '#64748b' }}>No {tab}s were found matching the filters.</td></tr>
+                            ) : items.map(item => (
                                 <tr key={item._id}>
                                     <td style={{ maxWidth: '300px' }}>
                                         <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1e293b' }}>{getItemName(item)}</div>

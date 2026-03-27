@@ -183,7 +183,14 @@ const deleteUser = async (req, res) => {
 /** GET /api/saas/trash/users */
 const getTrashedUsers = async (req, res) => {
     try {
-        const users = await User.find({ isDeleted: true })
+        const { collegeId, search } = req.query;
+        const filter = { isDeleted: true };
+        if (collegeId) filter.collegeId = collegeId;
+        if (search) {
+            filter.$or = [{ name: new RegExp(search, 'i') }, { email: new RegExp(search, 'i') }];
+        }
+
+        const users = await User.find(filter)
             .populate('collegeId', 'name')
             .select('-password')
             .sort({ deletedAt: -1 })
@@ -274,7 +281,11 @@ const getPlatformAnalytics = async (req, res) => {
 /** GET /api/saas/trash/colleges */
 const getTrashedColleges = async (req, res) => {
     try {
-        const colleges = await College.find({ isDeleted: true }).lean();
+        const { search } = req.query;
+        const filter = { isDeleted: true };
+        if (search) filter.name = new RegExp(search, 'i');
+
+        const colleges = await College.find(filter).sort({ deletedAt: -1 }).lean();
         res.json({ success: true, colleges });
     } catch (error) { res.status(500).json({ success: false, message: 'Server error' }); }
 };
@@ -299,9 +310,15 @@ const recoverCollege = async (req, res) => {
 /** GET /api/saas/trash/exams */
 const getTrashedExams = async (req, res) => {
     try {
-        const exams = await ExamSession.find({ isDeleted: true })
+        const { collegeId, search } = req.query;
+        const filter = { isDeleted: true };
+        if (collegeId) filter.collegeId = collegeId;
+        if (search) filter.title = new RegExp(search, 'i');
+
+        const exams = await ExamSession.find(filter)
             .populate('collegeId', 'name')
             .populate('createdBy', 'name')
+            .sort({ deletedAt: -1 })
             .lean();
         res.json({ success: true, exams });
     } catch (error) {
@@ -312,9 +329,16 @@ const getTrashedExams = async (req, res) => {
 /** GET /api/saas/trash/questions */
 const getTrashedQuestions = async (req, res) => {
     try {
-        const questions = await Question.find({ isDeleted: true })
+        const { collegeId, subject, search } = req.query;
+        const filter = { isDeleted: true };
+        if (collegeId) filter.collegeId = collegeId;
+        if (subject) filter.subject = subject;
+        if (search) filter.question = new RegExp(search, 'i');
+
+        const questions = await Question.find(filter)
             .populate('collegeId', 'name')
             .populate('createdBy', 'name')
+            .sort({ deletedAt: -1 })
             .lean();
         res.json({ success: true, questions });
     } catch (error) {
@@ -371,6 +395,33 @@ const recoverResult = async (req, res) => {
         res.json({ success: true, message: 'Result restored' });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/** POST /api/saas/recover/questions/bulk */
+const bulkRecoverQuestions = async (req, res) => {
+    try {
+        const { collegeId, subject, search } = req.body;
+        const filter = { isDeleted: true };
+        if (collegeId) filter.collegeId = collegeId;
+        if (subject) filter.subject = subject;
+        if (search) filter.question = new RegExp(search, 'i');
+
+        const result = await Question.updateMany(filter, { 
+            $set: { isDeleted: false, deletedAt: null } 
+        });
+
+        await logAction({
+            userId: req.user._id,
+            action: 'RESTORE',
+            targetModel: 'Question',
+            details: `Bulk recovered ${result.modifiedCount} questions`
+        });
+
+        res.json({ success: true, message: `${result.modifiedCount} questions restored successfully`, count: result.modifiedCount });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Bulk restore failed' });
     }
 };
 
@@ -789,19 +840,15 @@ const deleteResultPermanently = async (req, res) => {
 
 module.exports = {
     getColleges, createCollege, updateCollege, updateCollegeFeatures, deleteCollege,
-    getUsers, toggleUserActive,
+    getUsers,
     getPlatformAnalytics,
     getTrashedColleges, recoverCollege,
     getTrashedExams, getTrashedQuestions, getTrashedResults,
-    recoverExam, recoverQuestion, recoverResult,
+    recoverExam, recoverQuestion, recoverResult, bulkRecoverQuestions,
     createCollegeAdmin,
     getCollegeDetailedStats, exportCollegeStudents, exportCollegeQuestions,
     getCollegeQuestions, getCollegeExams, getCollegeResults,
-    exportExamQuestions, exportExamResults,
-    toggleExamActive, toggleExamResults, deleteExam, deleteQuestion,
-    updateUser, resetUserPassword, deleteUser,
-    getTrashedUsers, recoverUser,
-    getAuditLogs,
-    deleteCollegePermanently, deleteUserPermanently, deleteExamPermanently, 
-    deleteQuestionPermanently, deleteResultPermanently
+    exportExamQuestions, exportExamResults, getTrashedUsers, recoverUser,
+    deleteCollegePermanently, deleteUserPermanently, deleteExamPermanently, deleteQuestionPermanently, deleteResultPermanently,
+    getAuditLogs, toggleUserActive, updateUser, deleteUser, resetUserPassword, toggleExamActive, toggleExamResults, deleteExam, deleteQuestion,
 };

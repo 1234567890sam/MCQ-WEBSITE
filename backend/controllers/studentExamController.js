@@ -156,6 +156,36 @@ const startExam = async (req, res) => {
     }
 };
 
+/** POST /api/student/exams/:id/request-rejoin */
+const requestRejoin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const studentId = req.user._id;
+
+        const progress = await StudentExamProgress.findOne({ examSessionId: id, studentId });
+        if (!progress) return res.status(404).json({ success: false, message: 'Progress not found' });
+
+        if (progress.status === 'blocked' || (progress.rejoinCount || 0) >= 2) {
+            progress.status = 'blocked';
+            await progress.save();
+            return res.status(403).json({ success: false, message: 'Exam blocked. Max rejoin attempts reached. Contact teacher.' });
+        }
+
+        // Generate a one-time rejoin token
+        const token = crypto.randomBytes(32).toString('hex');
+        progress.rejoinToken = token;
+        progress.rejoinCount = (progress.rejoinCount || 0) + 1;
+        progress.lastActiveAt = new Date();
+        
+        await progress.save();
+
+        res.json({ success: true, token });
+    } catch (e) {
+        console.error('Request Rejoin Error:', e);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 /** GET /api/student/exams/:id/resume — get saved progress */
 const resumeExam = async (req, res) => {
     try {
