@@ -39,6 +39,9 @@ if (process.env.NODE_ENV !== 'production') {
     app.use(morgan('dev'));
 }
 
+// ── Trust Proxy (so rate-limit uses real client IP, not proxy IP) ─────────────
+app.set('trust proxy', 1);
+
 // ── Rate Limiting ────────────────────────────────────────────────────────────
 app.use('/api/', apiLimiter);
 

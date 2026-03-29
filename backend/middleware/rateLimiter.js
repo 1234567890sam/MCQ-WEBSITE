@@ -1,11 +1,12 @@
 const rateLimit = require('express-rate-limit');
 
 /**
- * Rate limiter for auth routes — strict: 5 attempts per 15 minutes
+ * Rate limiter for auth routes — 100 attempts per 15 minutes
+ * Increased limit to support shared networks (e.g. college labs)
  */
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5,
+    max: 100,
     message: {
         success: false,
         message: 'Too many attempts. Please try again after 15 minutes.',
