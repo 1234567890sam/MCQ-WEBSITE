@@ -9,6 +9,10 @@ const signupValidation = [
     body('name').trim().isLength({ min: 2, max: 50 }).withMessage('Name must be 2-50 characters'),
     body('email').isEmail().normalizeEmail().withMessage('Invalid email'),
     body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    body('collegeId').notEmpty().withMessage('College selection is required'),
+    body('studentId').trim().notEmpty().withMessage('Enrollment Number is required'),
+    body('semester').notEmpty().withMessage('Semester is required'),
+    body('department').trim().notEmpty().withMessage('Department is required'),
 ];
 
 const loginValidation = [
