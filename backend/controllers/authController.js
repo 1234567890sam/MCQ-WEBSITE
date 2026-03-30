@@ -46,7 +46,7 @@ const signup = async (req, res) => {
         const { accessToken, refreshToken } = generateTokens(user._id);
         res.cookie('refreshToken', refreshToken, cookieOpts(req));
 
-        const populatedUser = await User.findById(user._id).populate('collegeId', 'name code');
+        const populatedUser = await User.findById(user._id).populate('collegeId', 'name code features');
 
         res.status(201).json({
             success: true,
@@ -85,7 +85,7 @@ const login = async (req, res) => {
         const { accessToken, refreshToken } = generateTokens(user._id);
         res.cookie('refreshToken', refreshToken, cookieOpts(req));
 
-        const populatedUser = await User.findById(user._id).populate('collegeId', 'name code');
+        const populatedUser = await User.findById(user._id).populate('collegeId', 'name code features');
 
         res.json({
             success: true,
