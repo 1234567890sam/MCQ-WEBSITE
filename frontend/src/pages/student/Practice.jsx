@@ -15,6 +15,7 @@ export default function PracticePage() {
     const [step, setStep] = useState('config'); // config | quiz | done
     const [bookmarks, setBookmarks] = useState(new Set());
     const [startTime, setStartTime] = useState(null);
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
         api.get('/student/subjects').then(({ data }) => setSubjects(['All', ...data.subjects])).catch(() => { });
@@ -65,6 +66,8 @@ export default function PracticePage() {
     };
 
     const submitPractice = async () => {
+        if (submitting) return;
+        setSubmitting(true);
         const timeTaken = Math.round((Date.now() - startTime) / 1000);
         const answersArr = questions.map((q) => ({
             questionId: q._id,
@@ -75,8 +78,9 @@ export default function PracticePage() {
                 answers: answersArr, timeTaken, mode: 'practice', subject: config.subject,
             });
             navigate(`/result/${data.attemptId}`);
-        } catch {
-            toast.error('Failed to submit');
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to submit');
+            setSubmitting(false);
         }
     };
 
@@ -220,8 +224,8 @@ export default function PracticePage() {
                         Next <ChevronRight size={18} />
                     </button>
                 ) : (
-                    <button className="btn-primary" onClick={submitPractice} style={{ flex: 1, minWidth: '140px', justifyContent: 'center', background: 'linear-gradient(135deg, #10b981, #059669)' }}>
-                        Submit Results <CheckCircle2 size={18} />
+                    <button className="btn-primary" onClick={submitPractice} disabled={submitting} style={{ flex: 1, minWidth: '140px', justifyContent: 'center', background: 'linear-gradient(135deg, #10b981, #059669)', opacity: submitting ? 0.7 : 1, cursor: submitting ? 'wait' : 'pointer' }}>
+                        {submitting ? 'Submitting...' : 'Submit Results'} <CheckCircle2 size={18} />
                     </button>
                 )}
             </div>

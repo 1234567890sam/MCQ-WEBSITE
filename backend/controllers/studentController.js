@@ -57,6 +57,26 @@ const submitExam = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Answers are required' });
         }
 
+        // ── DUPLICATE PREVENTION: 60s Debounce ────────────────────────────────
+        const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
+        const duplicate = await Attempt.findOne({
+            userId: req.user._id,
+            mode,
+            subject: req.body.subject || 'Mixed',
+            createdAt: { $gte: oneMinuteAgo }
+        }).sort({ createdAt: -1 });
+
+        if (duplicate) {
+            // Already submitted recently, return the existing one instead of creating new
+            return res.status(200).json({ 
+                success: true, 
+                message: 'Exam already submitted recently. Redirecting to results...', 
+                attemptId: duplicate._id, 
+                attempt: duplicate,
+                isDuplicate: true
+            });
+        }
+
         // Fetch all questions
         const questionIds = answers.map((a) => a.questionId);
         const questions = await Question.find({ _id: { $in: questionIds } });

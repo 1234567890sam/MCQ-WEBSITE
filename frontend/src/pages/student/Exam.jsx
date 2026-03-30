@@ -26,6 +26,7 @@ export default function ExamPage() {
     const [warnings, setWarnings] = useState(0);
     const [violationMsg, setViolationMsg] = useState('');
     const [loading, setLoading] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
 
     const timerRef = useRef(null);
     const questionsRef = useRef([]);
@@ -53,6 +54,8 @@ export default function ExamPage() {
     }, [step, setHideNav]);
 
     const submitExam = useCallback(async (qs, ans, start) => {
+        if (submitting) return;
+        setSubmitting(true);
         clearInterval(timerRef.current);
         if (setHideNav) setHideNav(false);
         const timeTaken = Math.round((Date.now() - start) / 1000);
@@ -70,6 +73,7 @@ export default function ExamPage() {
                 navigate(`/session-result/${testCode.toUpperCase()}`);
             } catch (err) {
                 toast.error(err.response?.data?.message || 'Submit failed');
+                setSubmitting(false);
             }
         } else {
             const answersArr = qs.map((q) => ({
@@ -83,11 +87,12 @@ export default function ExamPage() {
                 });
                 toast.success('Exam submitted!');
                 navigate(`/result/${data.attemptId}`);
-            } catch {
-                toast.error('Submit failed');
+            } catch (err) {
+                toast.error(err.response?.data?.message || 'Submit failed');
+                setSubmitting(false);
             }
         }
-    }, [config.subject, config.negativeMarking, navigate, testCode]);
+    }, [config.subject, config.negativeMarking, navigate, testCode, submitting]);
 
     const handleAutoSubmit = useCallback(() => {
         toast.error('🚨 Too many violations! Exam auto-submitted.');
@@ -394,8 +399,8 @@ export default function ExamPage() {
                 <button className="btn-secondary" onClick={() => setCurrent(Math.min(questions.length - 1, current + 1))} disabled={current === questions.length - 1} style={{ flex: 1, minWidth: '100px', justifyContent: 'center', opacity: current === questions.length - 1 ? 0.4 : 1 }}>
                     Next <ChevronRight size={18} />
                 </button>
-                <button onClick={handleSubmitClick} style={{ flex: 1, minWidth: '140px', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.625rem 1.25rem' }}>
-                    <Send size={16} /> Submit Exam
+                <button onClick={handleSubmitClick} disabled={submitting} style={{ flex: 1, minWidth: '140px', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', borderRadius: '0.75rem', fontWeight: 700, cursor: submitting ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.625rem 1.25rem', opacity: submitting ? 0.7 : 1 }}>
+                    <Send size={16} /> {submitting ? 'Submitting...' : 'Submit Exam'}
                 </button>
             </div>
         </div>
