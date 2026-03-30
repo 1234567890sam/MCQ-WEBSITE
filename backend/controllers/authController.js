@@ -57,7 +57,10 @@ const signup = async (req, res) => {
                 name: populatedUser.name, 
                 email: populatedUser.email, 
                 role: populatedUser.role, 
-                collegeId: populatedUser.collegeId 
+                collegeId: populatedUser.collegeId,
+                studentId: populatedUser.studentId,
+                semester: populatedUser.semester,
+                department: populatedUser.department
             },
         });
     } catch (error) {
@@ -98,6 +101,9 @@ const login = async (req, res) => {
                 role: populatedUser.role,
                 collegeId: populatedUser.collegeId,
                 avatar: populatedUser.avatar,
+                studentId: populatedUser.studentId,
+                semester: populatedUser.semester,
+                department: populatedUser.department
             },
         });
     } catch (error) {

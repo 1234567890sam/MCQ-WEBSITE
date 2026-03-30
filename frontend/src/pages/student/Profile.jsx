@@ -81,6 +81,25 @@ export default function ProfilePage() {
                             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.4rem' }}>Account Role</label>
                             <input className="input" value={user?.role} disabled style={{ opacity: 0.6, cursor: 'not-allowed', textTransform: 'capitalize' }} />
                         </div>
+
+                        {/* Student Academic Details */}
+                        {user?.role === 'student' && (
+                            <div style={{ padding: '1rem', background: 'rgba(99,102,241,0.05)', borderRadius: '0.75rem', border: '1px solid rgba(99,102,241,0.1)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                <div style={{ gridColumn: 'span 2' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Department</label>
+                                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{user?.department || 'Not Assigned'}</div>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Semester</label>
+                                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{user?.semester || 'N/A'}</div>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Enrollment No.</label>
+                                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{user?.studentId || 'N/A'}</div>
+                                </div>
+                            </div>
+                        )}
+
                         <div>
                             <label style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                                 <Calendar size={13} /> Member Since
