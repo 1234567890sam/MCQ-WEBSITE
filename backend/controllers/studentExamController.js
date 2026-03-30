@@ -1,6 +1,7 @@
 const ExamSession = require('../models/ExamSession');
 const StudentExamProgress = require('../models/StudentExamProgress');
 const Attempt = require('../models/Attempt');
+const Question = require('../models/Question');
 const { getStudentTestCode } = require('../utils/testCodeHelper');
 const crypto = require('crypto');
 
@@ -333,7 +334,6 @@ const getMyResults = async (req, res) => {
         const results = await Attempt.find({
             userId: req.user._id,
             collegeId: req.user.collegeId,
-            mode: 'exam',
             isDeleted: false,
         })
         .populate('examSessionId', 'title subject passingMarks showResults showQA')
@@ -387,7 +387,24 @@ const getResultById = async (req, res) => {
                 options: (qs[idx]?.options || []).map(o => String(o)),
                 subject: qs[idx]?.subject || '',
             }));
+        } else if (!result.examSessionId) {
+            // Standard/Practice Mode: Always show QA but need to fetch from Question model
+            const qIds = result.answers.map(a => a.questionId).filter(Boolean);
+            const questions = await Question.find({ _id: { $in: qIds } }).lean();
+            const qMap = {};
+            questions.forEach(q => qMap[q._id.toString()] = q);
+
+            result.answersWithQuestions = result.answers.map(ans => {
+                const q = qMap[ans.questionId?.toString()];
+                return {
+                    ...ans,
+                    question: q?.question || 'Question deleted',
+                    options: (q?.options || []).map(o => String(o)),
+                    subject: q?.subject || '',
+                };
+            });
         }
+        
         // Don't expose questions array to student unnecessarily
         if (result.examSessionId) delete result.examSessionId.questions;
 

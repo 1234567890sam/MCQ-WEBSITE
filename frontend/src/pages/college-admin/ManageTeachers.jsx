@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { UserPlus, Trash2, Search, ToggleLeft, ToggleRight, X } from 'lucide-react';
+import { Search, Shield, UserCheck, UserX, ChevronLeft, ChevronRight, BarChart2, X, Plus, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
+import DepartmentSelect from '../../components/DepartmentSelect';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 
@@ -11,6 +12,7 @@ export default function ManageTeachers() {
     const [saving, setSaving] = useState(false);
 
     const fetch = () => {
+        setLoading(true);
         api.get('/college-admin/teachers')
             .then(r => setTeachers(r.data.teachers || []))
             .catch(console.error)
@@ -29,7 +31,7 @@ export default function ManageTeachers() {
             setShowForm(false);
             setForm({ name: '', email: '', password: '', department: '' });
             fetch();
-        } catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
+        } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
         finally { setSaving(false); }
     };
 
@@ -41,7 +43,7 @@ export default function ManageTeachers() {
     };
 
     const handleDelete = async (id) => {
-        if (!confirm('Remove this teacher?')) return;
+        if (!window.confirm('Remove this teacher?')) return;
         try {
             await api.delete(`/college-admin/teachers/${id}`);
             toast.success('Teacher removed');
@@ -57,7 +59,7 @@ export default function ManageTeachers() {
                     <p style={{ color: '#64748b', fontSize: '0.85rem' }}>Control staff accounts and departmental assignments</p>
                 </div>
                 <button onClick={() => setShowForm(!showForm)} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <PlusCircle size={18} /> Add Teacher
+                    <Plus size={18} /> Add Teacher
                 </button>
             </div>
 
@@ -78,11 +80,13 @@ export default function ManageTeachers() {
                         </div>
                         <div className="form-group">
                             <label className="label">Password *</label>
-                            <input value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="input" type="password" required />
+                            <input value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} className="input" type="password" required />
                         </div>
                         <div className="form-group">
-                            <label className="label">Department</label>
-                            <input value={form.department} onChange={e => setForm({...form, department: e.target.value})} className="input" placeholder="e.g. Computer Science" />
+                            <DepartmentSelect 
+                                value={form.department} 
+                                onChange={val => setForm({ ...form, department: val })} 
+                            />
                         </div>
                         <div className="md:col-span-2 flex gap-2 pt-2">
                             <button type="submit" disabled={saving} className="btn-primary" style={{ background: '#8b5cf6' }}>{saving ? 'Creating...' : 'Create Teacher'}</button>
@@ -141,5 +145,3 @@ export default function ManageTeachers() {
         </div>
     );
 }
-
-import { PlusCircle } from 'lucide-react';

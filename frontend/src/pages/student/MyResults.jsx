@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, BookOpen, Clock, CheckCircle2, XCircle, Eye, Lock } from 'lucide-react';
+import { Trophy, BookOpen, Clock, CheckCircle2, XCircle, Eye, Lock, Layout, Brain, GraduationCap } from 'lucide-react';
 import api from '../../api/axios';
 
 export default function MyResults() {
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState('actual'); // 'actual' | 'test' | 'practice'
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -15,32 +16,95 @@ export default function MyResults() {
             .finally(() => setLoading(false));
     }, []);
 
+    const filteredResults = results.filter(r => {
+        if (activeTab === 'actual') return r.mode === 'exam' && r.examSessionId;
+        if (activeTab === 'test') return r.mode === 'exam' && !r.examSessionId;
+        if (activeTab === 'practice') return r.mode === 'practice';
+        return false;
+    });
+
+    const TabButton = ({ id, label, icon: Icon, count }) => (
+        <button
+            onClick={() => setActiveTab(id)}
+            style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.75rem 1.25rem',
+                borderRadius: '0.75rem',
+                border: 'none',
+                background: activeTab === id ? 'white' : 'transparent',
+                color: activeTab === id ? '#6366f1' : '#64748b',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                boxShadow: activeTab === id ? '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1)' : 'none',
+                transition: 'all 0.2s ease',
+            }}
+        >
+            <Icon size={16} />
+            {label}
+            <span style={{
+                background: activeTab === id ? 'rgba(99,102,241,0.1)' : 'rgba(148,163,184,0.1)',
+                color: activeTab === id ? '#6366f1' : '#64748b',
+                padding: '0.1rem 0.5rem',
+                borderRadius: '1rem',
+                fontSize: '0.75rem',
+                marginLeft: '0.25rem'
+            }}>
+                {count}
+            </span>
+        </button>
+    );
+
+    const actualCount = results.filter(r => r.mode === 'exam' && r.examSessionId).length;
+    const testCount = results.filter(r => r.mode === 'exam' && !r.examSessionId).length;
+    const practiceCount = results.filter(r => r.mode === 'practice').length;
+
     return (
         <div className="animate-fade-in">
             <div style={{ marginBottom: '1.5rem' }}>
                 <h1 style={{ fontSize: '1.5rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Trophy size={22} color="#f59e0b" /> My Results
                 </h1>
-                <p style={{ color: '#64748b', fontSize: '0.85rem', marginTop: '0.25rem' }}>Your exam submission history</p>
+                <p style={{ color: '#64748b', fontSize: '0.85rem', marginTop: '0.25rem' }}>View your exam and practice performance history</p>
+            </div>
+
+            {/* Tabs */}
+            <div style={{
+                display: 'flex',
+                gap: '0.5rem',
+                background: '#f1f5f9',
+                padding: '0.375rem',
+                borderRadius: '1rem',
+                marginBottom: '1.5rem',
+                width: 'fit-content'
+            }}>
+                <TabButton id="actual" label="Actual Exams" icon={GraduationCap} count={actualCount} />
+                <TabButton id="test" label="Test Exams" icon={Layout} count={testCount} />
+                <TabButton id="practice" label="Practice Results" icon={Brain} count={practiceCount} />
             </div>
 
             {loading ? (
                 <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
                     <div className="spinner" />
                 </div>
-            ) : results.length === 0 ? (
+            ) : filteredResults.length === 0 ? (
                 <div className="card" style={{ textAlign: 'center', padding: '4rem 2rem' }}>
                     <Trophy size={48} color="#94a3b8" style={{ margin: '0 auto 1rem', display: 'block', opacity: 0.4 }} />
-                    <div style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: '0.5rem' }}>No Results Yet</div>
-                    <p style={{ color: '#64748b', fontSize: '0.875rem' }}>Take an exam to see your scores here!</p>
+                    <div style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: '0.5rem' }}>No {activeTab === 'actual' ? 'Actual' : activeTab === 'test' ? 'Test' : 'Practice'} Results Yet</div>
+                    <p style={{ color: '#64748b', fontSize: '0.875rem' }}>
+                        {activeTab === 'actual' ? 'Take a faculty-assigned exam' : activeTab === 'test' ? 'Take a standard exam' : 'Try some practice questions'} to see your scores here!
+                    </p>
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-                    {results.map(r => {
+                    {filteredResults.map(r => {
                         const session = r.examSessionId;
-                        const resultsReleased = session?.showResults;
+                        // Practice/Standard exams should always show results
+                        const resultsReleased = !session || session.showResults;
                         const passed = r.passed;
-                        const pct = r.percentage?.toFixed(0);
+                        const pct = (r.percentage ?? 0).toFixed(0);
                         const passColor = passed ? '#10b981' : '#ef4444';
 
                         return (
@@ -51,14 +115,14 @@ export default function MyResults() {
                                     {/* Exam Info */}
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ fontWeight: 800, fontSize: '0.95rem', marginBottom: '0.3rem' }}>
-                                            {session?.title || 'Exam'}
+                                            {session?.title || (r.mode === 'practice' ? 'Practice Session' : 'Standard Exam')}
                                         </div>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', fontSize: '0.78rem', color: '#64748b' }}>
                                             <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                <BookOpen size={12} /> {session?.subject || r.subject || '—'}
+                                                <BookOpen size={12} /> {session?.subject || r.subject || 'Mixed'}
                                             </span>
                                             <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                <Clock size={12} /> {Math.ceil(r.timeTaken / 60)} min
+                                                <Clock size={12} /> {Math.max(1, Math.ceil(r.timeTaken / 60))} min
                                             </span>
                                             <span>{new Date(r.createdAt).toLocaleDateString()}</span>
                                         </div>
@@ -71,14 +135,16 @@ export default function MyResults() {
                                                 {/* Score */}
                                                 <div style={{ textAlign: 'right' }}>
                                                     <div style={{ fontSize: '1.5rem', fontWeight: 900, color: passColor, lineHeight: 1 }}>{pct}%</div>
-                                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{r.score}/{r.maxScore} marks</div>
+                                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{r.score ? r.score.toFixed(1) : 0}/{r.maxScore} marks</div>
                                                 </div>
 
-                                                {/* Pass/Fail */}
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.78rem', fontWeight: 700, color: passColor }}>
-                                                    {passed ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
-                                                    {passed ? 'Pass' : 'Fail'}
-                                                </div>
+                                                {/* Pass/Fail (only for exams) */}
+                                                {r.mode === 'exam' && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.78rem', fontWeight: 700, color: passColor }}>
+                                                        {passed ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+                                                        {passed ? 'Pass' : 'Fail'}
+                                                    </div>
+                                                )}
 
                                                 {/* View Result button */}
                                                 <button

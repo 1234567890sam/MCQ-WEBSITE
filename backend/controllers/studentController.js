@@ -118,6 +118,7 @@ const submitExam = async (req, res) => {
 
         const attempt = await Attempt.create({
             userId: req.user._id,
+            collegeId: req.user.collegeId,
             mode,
             subject: req.body.subject || 'Mixed',
             answers: processedAnswers,
@@ -533,6 +534,7 @@ const submitSessionExam = async (req, res) => {
 
         const attempt = await Attempt.create({
             userId: req.user._id,
+            collegeId: req.user.collegeId,
             mode: 'exam',
             subject: session.subject,
             sessionCode: session.sessionCode,

@@ -18,6 +18,7 @@ router.delete('/teachers/:id', ...isCollegeAdmin, ctrl.deleteTeacher);
 // Students
 router.get('/students', ...isCollegeAdmin, ctrl.getStudents);
 router.post('/students', ...isCollegeAdmin, ctrl.createStudent);
+router.get('/departments', ...isCollegeAdmin, ctrl.getDepartments);
 router.patch('/students/:id/toggle-active', ...isCollegeAdmin, ctrl.toggleStudentActive);
 router.delete('/students/:id', ...isCollegeAdmin, ctrl.deleteStudent);
 router.post('/bulk-students', ...isCollegeAdmin, upload.single('file'), ctrl.bulkCreateStudents);

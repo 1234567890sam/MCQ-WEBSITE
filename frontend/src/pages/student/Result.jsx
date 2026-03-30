@@ -93,7 +93,7 @@ export default function ResultPage() {
                 <div style={{ fontSize: '3rem', marginBottom: '0.25rem' }}>{grade.emoji}</div>
                 <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: grade.color }}>{grade.label}</h1>
                 <p style={{ color: '#64748b', marginTop: '0.25rem', fontSize: '0.9rem', fontWeight: 600 }}>
-                    {session?.title || 'Practice Mode'} — {session?.subject || attempt.subject || 'All Subjects'}
+                    {session?.title || (attempt.mode === 'exam' ? 'Standard Exam' : 'Practice Mode')} — {session?.subject || attempt.subject || 'All Subjects'}
                 </p>
                 <div style={{ fontSize: '3.5rem', fontWeight: 900, margin: '1rem 0', lineHeight: 1 }}>
                     <span style={{ color: grade.color }}>{score?.toFixed(1)}</span>

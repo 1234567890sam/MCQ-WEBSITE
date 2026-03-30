@@ -43,6 +43,11 @@ const collegeSchema = new mongoose.Schema(
             type: Boolean,
             default: true,
         },
+        // Academic Departments
+        departments: {
+            type: [String],
+            default: ['Computer Engineering']
+        },
         // Soft delete
         isDeleted: { type: Boolean, default: false },
         deletedAt: { type: Date, default: null },

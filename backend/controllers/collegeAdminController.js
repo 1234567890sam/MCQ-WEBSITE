@@ -6,6 +6,14 @@ const { parseStudentExcel, parseExcel, parseSessionQuestionsExcel } = require('.
 const XLSX = require('xlsx');
 const { getStudentTestCode } = require('../utils/testCodeHelper');
 const { logAction } = require('../utils/auditLogger');
+const College = require('../models/College');
+
+const ensureDepartmentExists = async (collegeId, dept) => {
+    if (!dept) return;
+    try {
+        await College.findByIdAndUpdate(collegeId, { $addToSet: { departments: dept } });
+    } catch (e) { console.error('Failed to sync department:', e); }
+};
 
 // ── User Management ──────────────────────────────────────────────────────────
 
@@ -24,6 +32,8 @@ const createTeacher = async (req, res) => {
         if (!name || !email || !password) return res.status(400).json({ success: false, message: 'Name, email and password required' });
         const existing = await User.findOne({ email });
         if (existing) return res.status(409).json({ success: false, message: 'Email already registered' });
+        
+        await ensureDepartmentExists(req.user.collegeId, department);
         const teacher = await User.create({ name, email, password, role: 'teacher', collegeId: req.user.collegeId, department });
         
         await logAction({
@@ -75,6 +85,8 @@ const createStudent = async (req, res) => {
         if (!name || !email || !password) return res.status(400).json({ success: false, message: 'Required fields missing' });
         const existing = await User.findOne({ email });
         if (existing) return res.status(409).json({ success: false, message: 'Email already registered' });
+        
+        await ensureDepartmentExists(req.user.collegeId, department);
         const student = await User.create({ name, email, password, role: 'student', collegeId: req.user.collegeId, studentId, semester, department });
         
         await logAction({
@@ -253,6 +265,17 @@ const getSubjects = async (req, res) => {
             { $sort: { _id: 1 } }
         ]);
         res.json({ success: true, subjects: subjects.map(s => s._id), subjectCounts: subjects });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/** GET /api/college/departments */
+const getDepartments = async (req, res) => {
+    try {
+        const college = await College.findById(req.user.collegeId).select('departments');
+        const depts = college?.departments || ['Computer Engineering'];
+        res.json({ success: true, departments: depts });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });
     }
@@ -731,6 +754,8 @@ const bulkCreateStudents = async (req, res) => {
                 semester: s.semester,
                 department: s.department
             });
+
+            await ensureDepartmentExists(req.user.collegeId, s.department);
 
             created.push({
                 name: user.name,

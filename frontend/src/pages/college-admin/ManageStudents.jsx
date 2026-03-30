@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { UserPlus, Trash2, Search, ToggleLeft, ToggleRight, X, Users } from 'lucide-react';
+import { Search, Shield, UserCheck, UserX, ChevronLeft, ChevronRight, BarChart2, X, Plus, Upload, Download, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
+import DepartmentSelect from '../../components/DepartmentSelect';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
@@ -14,6 +15,7 @@ export default function ManageStudents() {
     const navigate = useNavigate();
 
     const fetchStudents = (q = '') => {
+        setLoading(true);
         api.get(`/college-admin/students?search=${q}`)
             .then(r => setStudents(r.data.students || []))
             .catch(console.error)
@@ -37,7 +39,7 @@ export default function ManageStudents() {
             setShowForm(false);
             setForm({ name: '', email: '', password: '', studentId: '', semester: '', department: '' });
             fetchStudents();
-        } catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
+        } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
         finally { setSaving(false); }
     };
 
@@ -49,7 +51,7 @@ export default function ManageStudents() {
     };
 
     const handleDelete = async (id) => {
-        if (!confirm('Remove this student?')) return;
+        if (!window.confirm('Remove this student?')) return;
         try {
             await api.delete(`/college-admin/students/${id}`);
             toast.success('Removed');
@@ -66,10 +68,10 @@ export default function ManageStudents() {
                 </div>
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                     <button onClick={() => navigate('/college-admin/students/bulk')} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Users size={18} /> Bulk Upload
+                        <Upload size={18} /> Bulk Upload
                     </button>
                     <button onClick={() => setShowForm(!showForm)} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#3b82f6' }}>
-                        <UserPlus size={18} /> Add Student
+                        <Plus size={18} /> Add Student
                     </button>
                 </div>
             </div>
@@ -99,11 +101,13 @@ export default function ManageStudents() {
                         </div>
                         <div className="form-group">
                             <label className="label">Semester</label>
-                            <input value={form.semester} onChange={e => setForm({...form, semester: e.target.value})} className="input" placeholder="e.g. 4th" />
+                            <input className="input" placeholder="e.g. 4th" value={form.semester} onChange={e => setForm({ ...form, semester: e.target.value })} />
                         </div>
                         <div className="form-group">
-                            <label className="label">Department</label>
-                            <input value={form.department} onChange={e => setForm({...form, department: e.target.value})} className="input" placeholder="e.g. Computer Science" />
+                            <DepartmentSelect
+                                value={form.department}
+                                onChange={val => setForm({ ...form, department: val })}
+                            />
                         </div>
                         <div className="md:col-span-3 flex gap-2 pt-2">
                             <button type="submit" disabled={saving} className="btn-primary" style={{ background: '#3b82f6' }}>{saving ? 'Creating...' : 'Create Student'}</button>
