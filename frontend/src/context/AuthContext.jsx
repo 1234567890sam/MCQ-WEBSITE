@@ -18,8 +18,23 @@ export const AuthProvider = ({ children }) => {
         try {
             const { data } = await api.get('/auth/me');
             setUser(data.user);
-        } catch {
-            localStorage.removeItem('accessToken');
+        } catch (err) {
+            // If it's a token-expired error, try to refresh first
+            if (err?.response?.data?.code === 'TOKEN_EXPIRED') {
+                try {
+                    const { data: refreshData } = await api.post('/auth/refresh', {}, { withCredentials: true });
+                    localStorage.setItem('accessToken', refreshData.accessToken);
+                    // Retry /me with new token
+                    const { data } = await api.get('/auth/me');
+                    setUser(data.user);
+                } catch {
+                    localStorage.removeItem('accessToken');
+                    setUser(null);
+                }
+            } else {
+                localStorage.removeItem('accessToken');
+                setUser(null);
+            }
         } finally {
             setLoading(false);
         }
