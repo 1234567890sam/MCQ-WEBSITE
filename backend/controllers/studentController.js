@@ -295,7 +295,11 @@ const getLeaderboard = async (req, res) => {
         }
 
         const leaderboard = await Attempt.aggregate([
-            { $match: { createdAt: { $gte: startDate } } },
+            { $match: { 
+                collegeId: req.user.collegeId, 
+                createdAt: { $gte: startDate },
+                isDeleted: false 
+            } },
             {
                 $group: {
                     _id: '$userId',
