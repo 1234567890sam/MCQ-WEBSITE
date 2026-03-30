@@ -147,7 +147,7 @@ const getMe = async (req, res) => {
 /** GET /api/auth/colleges — public: list active colleges for signup dropdown */
 const getColleges = async (req, res) => {
     try {
-        const colleges = await College.find({ isActive: true, isDeleted: false }, 'name code');
+        const colleges = await College.find({ isActive: true, isDeleted: false }, 'name code departments');
         res.json({ success: true, colleges });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });

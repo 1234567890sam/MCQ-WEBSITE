@@ -74,9 +74,13 @@ const generateResultPDF = (res, attempt, user) => {
             doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
             doc.text(`Q${i + 1}. ${questionText}`, { width: 500 });
 
+            const ansText = ans.selectedText ? `${ans.selectedOption || 'None'} (${ans.selectedText})` : (ans.selectedOption || 'None');
+            const corText = ans.correctText ? `${ans.correctOption} (${ans.correctText})` : ans.correctOption;
+
             doc.fontSize(9).font('Helvetica').fillColor(color);
-            doc.text(`${status}  |  Your Answer: ${ans.selectedOption || 'None'}  |  Correct: ${ans.correctOption}`);
-            doc.fillColor('#000000').moveDown(0.5);
+            doc.text(`${status}   |   Your Answer: ${ansText}`, { continued: true });
+            doc.fillColor('#000000').text(`   |   Correct: ${corText}`);
+            doc.moveDown(0.5);
         });
     }
 

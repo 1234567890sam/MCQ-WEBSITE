@@ -110,6 +110,7 @@ const submitExam = async (req, res) => {
         }).filter(Boolean);
 
         const accuracy = maxScore > 0 ? Math.max(0, (score / maxScore) * 100) : 0;
+        const passed = accuracy >= 40; // Default 40% passing for practice/standard mode
 
         // Determine weak subjects (< 50% accuracy)
         const weakSubjects = Object.entries(subjectPerformance)
@@ -125,6 +126,7 @@ const submitExam = async (req, res) => {
             score: Math.max(0, Math.round(score * 100) / 100),
             maxScore,
             accuracy: parseFloat(accuracy.toFixed(2)),
+            passed,
             totalQuestions: processedAnswers.length,
             correctCount,
             wrongCount,
@@ -334,25 +336,51 @@ const downloadResultPDF = async (req, res) => {
         const attempt = await Attempt.findOne({ _id: req.params.attemptId, userId: req.user._id });
         if (!attempt) return res.status(404).json({ success: false, message: 'Attempt not found' });
 
-        let populated = attempt;
+        let populated = attempt.toObject();
+        const OPTS = ['A', 'B', 'C', 'D'];
 
         if (attempt.sessionCode) {
-            // It's a session attempt, we need to get question text from the session
+            // Session-based attempt: Re-shuffle options as the student saw them
             const session = await ExamSession.findOne({ sessionCode: attempt.sessionCode });
             if (session) {
                 const seed = req.user._id.toString() + attempt.sessionCode;
-                const shuffled = seededShuffle(session.questions, seed);
-                // Attach question text to answers for the PDF generator
-                populated = attempt.toObject();
+                const shuffledQs = seededShuffle(session.questions, seed);
+                
                 populated.answers.forEach((ans, i) => {
-                    const q = shuffled[i];
-                    if (q) ans.questionText = q.question;
+                    const q = shuffledQs[i];
+                    if (q) {
+                        const studentOptions = seededShuffle(q.options, seed + i);
+                        ans.questionText = q.question;
+                        
+                        // User's selected option text
+                        if (ans.selectedOption) {
+                            const selIdx = OPTS.indexOf(ans.selectedOption.toUpperCase());
+                            ans.selectedText = studentOptions[selIdx] || '—';
+                        } else ans.selectedText = 'None';
+
+                        // Correct answer text
+                        const correctIdx = OPTS.indexOf(q.correctAnswer.toUpperCase());
+                        ans.correctText = q.options[correctIdx] || '—';
+                    }
                 });
             }
         } else {
-            populated = await Attempt.populate(attempt, {
-                path: 'answers.questionId',
-                select: 'question options correctAnswer subject'
+            // Normal Attempt: Fetch questions from Question model
+            const qIds = attempt.answers.map(a => a.questionId).filter(Boolean);
+            const questions = await Question.find({ _id: { $in: qIds } }).lean();
+            const qMap = {};
+            questions.forEach(q => qMap[q._id.toString()] = q);
+
+            populated.answers.forEach(ans => {
+                const q = qMap[ans.questionId?.toString()];
+                if (q) {
+                    ans.questionText = q.question;
+                    const selIdx = OPTS.indexOf(ans.selectedOption?.toUpperCase());
+                    ans.selectedText = q.options[selIdx] || 'None';
+                    
+                    const corIdx = OPTS.indexOf(ans.correctOption?.toUpperCase() || q.correctAnswer?.toUpperCase());
+                    ans.correctText = q.options[corIdx] || '—';
+                }
             });
         }
 
@@ -531,6 +559,7 @@ const submitSessionExam = async (req, res) => {
         });
 
         const accuracy = maxScore > 0 ? Math.max(0, (score / maxScore) * 100) : 0;
+        const passed = accuracy >= (session.passingMarks || 50);
 
         const attempt = await Attempt.create({
             userId: req.user._id,
@@ -542,6 +571,7 @@ const submitSessionExam = async (req, res) => {
             score: Math.max(0, Math.round(score * 100) / 100),
             maxScore,
             accuracy: parseFloat(accuracy.toFixed(2)),
+            passed,
             totalQuestions: shuffled.length,
             correctCount,
             wrongCount,
