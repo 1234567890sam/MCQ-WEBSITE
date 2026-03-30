@@ -946,5 +946,5 @@ module.exports = {
     uploadQuestions, getQuestions, updateQuestion, deleteQuestion, deleteQuestionsBySubject, getSubjects,
     createExamSession, getExamSessions, getExamSession, toggleSessionActive, 
     toggleSessionResults, getSessionResults, exportSessionResults, deleteExamSession,
-    getEligibleStudents, downloadExamTestCodeExcel
+    getEligibleStudents, downloadExamTestCodeExcel, getDepartments
 };
