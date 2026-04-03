@@ -6,7 +6,7 @@ const {
     getDashboardStats, addBookmark, removeBookmark, getBookmarks,
     getLeaderboard, downloadResultPDF, getWrongQuestions, updateProfile,
     joinExamByCode, getSessionQuestions, submitSessionExam, getSessionResult,
-    getMySessionResults, getStudentSubjects
+    getMySessionResults, getStudentSubjects, savePracticeProgress
 } = require('../controllers/studentController');
 
 // All student routes require authentication
@@ -14,6 +14,7 @@ router.use(verifyToken, requireStudent);
 
 // Practice & Exam (regular)
 router.get('/practice', getPracticeQuestions);
+router.put('/practice/save-progress', savePracticeProgress);
 router.post('/submit-exam', submitExam);
 router.get('/subjects', getStudentSubjects);
 

@@ -158,7 +158,7 @@ const getMyExams = async (req, res) => {
 /** POST /api/teacher/exams */
 const createExam = async (req, res) => {
     try {
-        const { title, subject, description, questions = [], questionIds = [], duration, passingMarks, negativeMarking, date, allowedStudentIds } = req.body;
+        const { title, subject, description, type, questions = [], questionIds = [], duration, passingMarks, negativeMarking, date, allowedStudentIds } = req.body;
         if (!title || !subject) return res.status(400).json({ success: false, message: 'Title and subject required' });
 
         let examQuestions = [];
@@ -213,6 +213,7 @@ const createExam = async (req, res) => {
             title,
             subject,
             description: description || '',
+            type: type || 'exam',
             questions: examQuestions,
             duration: duration || 60,
             passingMarks: passingMarks || 50,
@@ -245,7 +246,7 @@ const updateExam = async (req, res) => {
         const exam = await ExamSession.findOne({ _id: req.params.id, createdBy: req.user._id, isDeleted: false });
         if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
 
-        const allowed = ['title', 'subject', 'description', 'duration', 'passingMarks', 'negativeMarking', 'isActive', 'showResults', 'showQA'];
+        const allowed = ['title', 'subject', 'description', 'type', 'duration', 'passingMarks', 'negativeMarking', 'isActive', 'showResults', 'showQA'];
         allowed.forEach((field) => { if (req.body[field] !== undefined) exam[field] = req.body[field]; });
         await exam.save();
         

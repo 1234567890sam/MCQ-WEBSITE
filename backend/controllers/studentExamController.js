@@ -255,16 +255,28 @@ const saveProgress = async (req, res) => {
 /** POST /api/student/exams/:id/submit */
 const submitExam = async (req, res) => {
     try {
-        const { answers = [], timeTaken, autoSubmitted = false } = req.body;
+        let { answers = [], timeTaken, autoSubmitted = false } = req.body;
 
         const exam = await ExamSession.findOne({ _id: req.params.id, isDeleted: false });
         if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
 
-        // Prevent double submit
+        // Fetch existing progress
         const existing = await StudentExamProgress.findOne({ studentId: req.user._id, examSessionId: exam._id });
+
+        // Prevent double submit
         if (existing?.status === 'submitted' || existing?.status === 'auto-submitted') {
             const result = await Attempt.findOne({ userId: req.user._id, examSessionId: exam._id });
             return res.json({ success: true, alreadySubmitted: true, resultId: result?._id });
+        }
+
+        // LIGHTWEIGHT SUBMIT: If answers are missing in request, use the auto-saved ones from DB
+        if (!answers || answers.length === 0) {
+            if (existing && existing.answers && existing.answers.length > 0) {
+                answers = existing.answers;
+                console.log(`[Lightweight Submit] Using ${answers.length} saved answers for exam ${exam._id}`);
+            } else {
+                console.log('[Lightweight Submit] No answers provided and no saved progress found.');
+            }
         }
 
         // Grade the exam
@@ -289,7 +301,7 @@ const submitExam = async (req, res) => {
 
         const attempt = await Attempt.create({
             userId: req.user._id,
-            mode: 'exam',
+            mode: exam.type || 'exam',
             collegeId: req.user.collegeId,
             examSessionId: exam._id,
             sessionCode: exam.sessionCode,

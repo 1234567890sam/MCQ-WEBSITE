@@ -13,7 +13,7 @@ const attemptSchema = new mongoose.Schema(
         },
         mode: {
             type: String,
-            enum: ['practice', 'exam'],
+            enum: ['practice', 'exam', 'test'],
             default: 'practice',
         },
         subject: { type: String, default: 'Mixed' },

@@ -24,6 +24,11 @@ const examSessionSchema = new mongoose.Schema(
             trim: true,
         },
         description: { type: String, trim: true, default: '' },
+        type: {
+            type: String,
+            enum: ['exam', 'test'],
+            default: 'exam',
+        },
         // Multi-tenant
         collegeId: {
             type: mongoose.Schema.Types.ObjectId,

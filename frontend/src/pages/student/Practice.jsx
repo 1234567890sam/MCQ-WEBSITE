@@ -4,6 +4,8 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { BookOpen, Filter, Hash, PlayCircle, CheckCircle2, XCircle, Bookmark, BookmarkCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 
+const AUTO_SAVE_INTERVAL = 15000; // 15 seconds for practice
+
 export default function PracticePage() {
     const navigate = useNavigate();
     const [subjects, setSubjects] = useState([]);
@@ -24,6 +26,24 @@ export default function PracticePage() {
             setBookmarks(new Set(bIds));
         }).catch(() => { });
     }, []);
+
+    // Auto-save Practice Progress
+    useEffect(() => {
+        if (step !== 'quiz' || !startTime) return;
+
+        const interval = setInterval(() => {
+            const timeTaken = Math.round((Date.now() - startTime) / 1000);
+            api.put('/student/practice/save-progress', { 
+                answers, 
+                timeTaken 
+            }).catch(() => {
+                // Silent fail for practice auto-save to avoid interrupting user
+                console.warn("[Practice] Auto-save failed (heartbeat still keeps server alive)");
+            });
+        }, AUTO_SAVE_INTERVAL);
+
+        return () => clearInterval(interval);
+    }, [step, startTime, answers]);
 
     const startQuiz = async () => {
         try {
@@ -69,13 +89,11 @@ export default function PracticePage() {
         if (submitting) return;
         setSubmitting(true);
         const timeTaken = Math.round((Date.now() - startTime) / 1000);
-        const answersArr = questions.map((q) => ({
-            questionId: q._id,
-            selectedOption: answers[q._id] || null,
-        }));
+
         try {
+            // LIGHTWEIGHT SUBMIT: Send empty answers array. Backend will use the most recent auto-saved answers.
             const { data } = await api.post('/student/submit-exam', {
-                answers: answersArr, timeTaken, mode: 'practice', subject: config.subject,
+                answers: [], timeTaken, mode: 'practice', subject: config.subject,
             });
             navigate(`/result/${data.attemptId}`);
         } catch (err) {

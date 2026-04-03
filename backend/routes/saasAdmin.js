@@ -38,6 +38,7 @@ router.patch('/exams/:id/toggle-results', ...isSaas, ctrl.toggleExamResults);
 router.delete('/exams/:id', ...isSaas, ctrl.deleteExam);
 
 // Question operations
+router.delete('/questions/bulk', ...isSaas, ctrl.bulkDeleteQuestions);
 router.delete('/questions/:id', ...isSaas, ctrl.deleteQuestion);
 
 // Global Trash / Recovery
@@ -52,6 +53,9 @@ router.post('/recover/user/:id', ...isSaas, ctrl.recoverUser);
 router.post('/recover/exam/:id', ...isSaas, ctrl.recoverExam);
 router.post('/recover/question/:id', ...isSaas, ctrl.recoverQuestion);
 router.post('/recover/questions/bulk', ...isSaas, ctrl.bulkRecoverQuestions);
+router.post('/recover/users/bulk', ...isSaas, ctrl.bulkRecoverUsers);
+router.post('/recover/exams/bulk', ...isSaas, ctrl.bulkRecoverExams);
+router.post('/recover/results/bulk', ...isSaas, ctrl.bulkRecoverResults);
 router.post('/recover/result/:id', ...isSaas, ctrl.recoverResult);
 
 // Permanent Deletion
@@ -60,5 +64,9 @@ router.delete('/trash/user/:id', ...isSaas, ctrl.deleteUserPermanently);
 router.delete('/trash/exam/:id', ...isSaas, ctrl.deleteExamPermanently);
 router.delete('/trash/question/:id', ...isSaas, ctrl.deleteQuestionPermanently);
 router.delete('/trash/result/:id', ...isSaas, ctrl.deleteResultPermanently);
+router.delete('/trash/questions/bulk', ...isSaas, ctrl.bulkDeleteQuestionsPermanently);
+router.delete('/trash/results/bulk', ...isSaas, ctrl.bulkDeleteResultsPermanently);
+router.delete('/trash/exams/bulk', ...isSaas, ctrl.bulkDeleteExamsPermanently);
+router.delete('/trash/users/bulk', ...isSaas, ctrl.bulkDeleteUsersPermanently);
 
 module.exports = router;

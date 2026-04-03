@@ -1,9 +1,12 @@
+const mongoose = require('mongoose');
 const College = require('../models/College');
 const User = require('../models/User');
 const ExamSession = require('../models/ExamSession');
 const Attempt = require('../models/Attempt');
 const Question = require('../models/Question');
 const AuditLog = require('../models/AuditLog');
+const StudentExamProgress = require('../models/StudentExamProgress');
+const PracticeProgress = require('../models/PracticeProgress');
 const bcrypt = require('bcryptjs');
 const { logAction } = require('../utils/auditLogger');
 
@@ -183,9 +186,10 @@ const deleteUser = async (req, res) => {
 /** GET /api/saas/trash/users */
 const getTrashedUsers = async (req, res) => {
     try {
-        const { collegeId, search } = req.query;
+        const { collegeId, role, search } = req.query;
         const filter = { isDeleted: true };
         if (collegeId) filter.collegeId = collegeId;
+        if (role) filter.role = role;
         if (search) {
             filter.$or = [{ name: new RegExp(search, 'i') }, { email: new RegExp(search, 'i') }];
         }
@@ -310,9 +314,10 @@ const recoverCollege = async (req, res) => {
 /** GET /api/saas/trash/exams */
 const getTrashedExams = async (req, res) => {
     try {
-        const { collegeId, search } = req.query;
+        const { collegeId, subject, search } = req.query;
         const filter = { isDeleted: true };
         if (collegeId) filter.collegeId = collegeId;
+        if (subject) filter.subject = subject;
         if (search) filter.title = new RegExp(search, 'i');
 
         const exams = await ExamSession.find(filter)
@@ -349,9 +354,20 @@ const getTrashedQuestions = async (req, res) => {
 /** GET /api/saas/trash/results */
 const getTrashedResults = async (req, res) => {
     try {
-        const results = await Attempt.find({ isDeleted: true, mode: 'exam' })
+        const { collegeId, examSessionId, search } = req.query;
+        const filter = { isDeleted: true, mode: { $in: ['exam', 'test'] } };
+        
+        if (collegeId) filter.collegeId = collegeId;
+        if (examSessionId) filter.examSessionId = examSessionId;
+        if (search) {
+            // Since results refer to users, we might need a more complex query if we want to search by name in results
+            // but for now, we'll keep it simple or use userId search if provided.
+        }
+
+        const results = await Attempt.find(filter)
             .populate('userId', 'name email')
             .populate('examSessionId', 'title')
+            .sort({ deletedAt: -1 })
             .lean();
         res.json({ success: true, results });
     } catch (error) {
@@ -694,17 +710,48 @@ const deleteExam = async (req, res) => {
             targetId: req.params.id,
             details: `Soft-deleted exam session: ${req.params.id}`
         });
-
         res.json({ success: true, message: 'Exam soft-deleted' });
     } catch (error) { res.status(500).json({ success: false, message: 'Server error' }); }
 };
 
-/** DELETE /api/saas/questions/:id */
+/** DELETE /api/saas/questions/:id (soft) */
 const deleteQuestion = async (req, res) => {
     try {
         await Question.findByIdAndUpdate(req.params.id, { isDeleted: true, deletedAt: new Date() });
-        res.json({ success: true, message: 'Question soft-deleted' });
+        res.json({ success: true, message: 'Question moved to trash' });
     } catch (error) { res.status(500).json({ success: false, message: 'Server error' }); }
+};
+
+/** DELETE /api/saas/questions/bulk (soft) */
+const bulkDeleteQuestions = async (req, res) => {
+    try {
+        const { collegeId, subject, search } = req.query;
+        const filter = { isDeleted: false };
+        
+        if (collegeId) filter.collegeId = collegeId;
+        if (subject) filter.subject = subject;
+        if (search) filter.question = new RegExp(search, 'i');
+
+        const result = await Question.updateMany(filter, { 
+            $set: { isDeleted: true, deletedAt: new Date() } 
+        });
+
+        await logAction({
+            userId: req.user._id,
+            action: 'DELETE',
+            targetModel: 'Question',
+            details: `Bulk soft-deleted ${result.modifiedCount} questions.`
+        });
+
+        res.json({ 
+            success: true, 
+            message: `${result.modifiedCount} questions moved to trash`, 
+            count: result.modifiedCount 
+        });
+    } catch (error) {
+        console.error('Bulk Soft Delete Questions Error:', error);
+        res.status(500).json({ success: false, message: 'Bulk delete failed' });
+    }
 };
 
 /** GET /api/saas/audit-logs */
@@ -771,20 +818,38 @@ const deleteCollegePermanently = async (req, res) => {
 };
 
 const deleteUserPermanently = async (req, res) => {
+    const session = await User.startSession();
+    session.startTransaction();
     try {
-        const user = await User.findOneAndDelete({ _id: req.params.id, isDeleted: true });
-        if (!user) return res.status(404).json({ success: false, message: 'User not found in trash' });
+        const user = await User.findOneAndDelete({ _id: req.params.id, isDeleted: true }).session(session);
+        if (!user) {
+            await session.abortTransaction();
+            return res.status(404).json({ success: false, message: 'User not found in trash' });
+        }
+
+        const userId = user._id;
+        await Attempt.deleteMany({ userId }).session(session);
+        await StudentExamProgress.deleteMany({ studentId: userId }).session(session);
+        await PracticeProgress.deleteMany({ studentId: userId }).session(session);
+        await AuditLog.deleteMany({ userId }).session(session);
 
         await logAction({
             userId: req.user._id,
             action: 'DELETE',
             targetModel: 'User',
             targetId: req.params.id,
-            details: `PERMANENTLY DELETED user: ${user.email}`
-        });
+            details: `PERMANENTLY DELETED user: ${user.email} and all associated data.`
+        }, { session });
 
-        res.json({ success: true, message: 'User deleted permanently' });
-    } catch (error) { res.status(500).json({ success: false, message: 'Server error' }); }
+        await session.commitTransaction();
+        res.json({ success: true, message: 'User and all data deleted permanently' });
+    } catch (error) {
+        await session.abortTransaction();
+        console.error('Delete User Permanent Error:', error);
+        res.status(500).json({ success: false, message: 'Server error during deletion' });
+    } finally {
+        session.endSession();
+    }
 };
 
 const deleteExamPermanently = async (req, res) => {
@@ -838,17 +903,148 @@ const deleteResultPermanently = async (req, res) => {
     } catch (error) { res.status(500).json({ success: false, message: 'Server error' }); }
 };
 
+// ── Bulk Recovery & Purge ───────────────────────────────────────────────────
+
+/** POST /api/saas/recover/users/bulk */
+const bulkRecoverUsers = async (req, res) => {
+    try {
+        const { collegeId, role } = req.body;
+        const filter = { isDeleted: true };
+        if (collegeId) filter.collegeId = collegeId;
+        if (role) filter.role = role;
+
+        const result = await User.updateMany(filter, { $set: { isDeleted: false, deletedAt: null } });
+        
+        await logAction({
+            userId: req.user._id,
+            action: 'RESTORE',
+            targetModel: 'User',
+            details: `Bulk restored ${result.modifiedCount} users.`
+        });
+
+        res.json({ success: true, message: `${result.modifiedCount} users restored`, count: result.modifiedCount });
+    } catch (e) { res.status(500).json({ success: false, message: 'Bulk restore failed' }); }
+};
+
+/** POST /api/saas/recover/exams/bulk */
+const bulkRecoverExams = async (req, res) => {
+    try {
+        const { collegeId } = req.body;
+        const filter = { isDeleted: true };
+        if (collegeId) filter.collegeId = collegeId;
+
+        const result = await ExamSession.updateMany(filter, { $set: { isDeleted: false, deletedAt: null } });
+        res.json({ success: true, message: `${result.modifiedCount} exams restored`, count: result.modifiedCount });
+    } catch (e) { res.status(500).json({ success: false, message: 'Bulk restore failed' }); }
+};
+
+/** POST /api/saas/recover/results/bulk */
+const bulkRecoverResults = async (req, res) => {
+    try {
+        const { collegeId, examSessionId } = req.body;
+        const filter = { isDeleted: true, mode: { $in: ['exam', 'test'] } };
+        if (collegeId) filter.collegeId = collegeId;
+        if (examSessionId) filter.examSessionId = examSessionId;
+
+        const result = await Attempt.updateMany(filter, { $set: { isDeleted: false, deletedAt: null } });
+        res.json({ success: true, message: `${result.modifiedCount} results restored`, count: result.modifiedCount });
+    } catch (e) { res.status(500).json({ success: false, message: 'Bulk restore failed' }); }
+};
+
+/** DELETE /api/saas/trash/questions/bulk (Purge) */
+const bulkDeleteQuestionsPermanently = async (req, res) => {
+    try {
+        const { collegeId, subject } = req.query;
+        const filter = { isDeleted: true };
+        if (collegeId) filter.collegeId = collegeId;
+        if (subject) filter.subject = subject;
+
+        const result = await Question.deleteMany(filter);
+        
+        await logAction({
+            userId: req.user._id,
+            action: 'DELETE',
+            targetModel: 'Question',
+            details: `Bulk purged ${result.deletedCount} questions from trash.`
+        });
+
+        res.json({ success: true, message: `${result.deletedCount} questions deleted permanently`, count: result.deletedCount });
+    } catch (e) { res.status(500).json({ success: false, message: 'Bulk delete failed' }); }
+};
+
+/** DELETE /api/saas/trash/results/bulk (Purge) */
+const bulkDeleteResultsPermanently = async (req, res) => {
+    try {
+        const { collegeId, examSessionId } = req.query;
+        const filter = { isDeleted: true, mode: { $in: ['exam', 'test'] } };
+        if (collegeId) filter.collegeId = collegeId;
+        if (examSessionId) filter.examSessionId = examSessionId;
+
+        const result = await Attempt.deleteMany(filter);
+        res.json({ success: true, message: `${result.deletedCount} results deleted permanently`, count: result.deletedCount });
+    } catch (e) { res.status(500).json({ success: false, message: 'Bulk delete failed' }); }
+};
+
+/** DELETE /api/saas/trash/exams/bulk (Purge) */
+const bulkDeleteExamsPermanently = async (req, res) => {
+    try {
+        const { collegeId } = req.query;
+        const filter = { isDeleted: true };
+        if (collegeId) filter.collegeId = collegeId;
+
+        const result = await ExamSession.deleteMany(filter);
+        res.json({ success: true, message: `${result.deletedCount} exams deleted permanently`, count: result.deletedCount });
+    } catch (e) { res.status(500).json({ success: false, message: 'Bulk delete failed' }); }
+};
+
+/** DELETE /api/saas/trash/users/bulk (Purge with Recursion) */
+const bulkDeleteUsersPermanently = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const { collegeId, role } = req.query;
+        const filter = { isDeleted: true };
+        if (collegeId) filter.collegeId = collegeId;
+        if (role) filter.role = role;
+
+        const users = await User.find(filter).session(session).select('_id email').lean();
+        const userIds = users.map(u => u._id);
+
+        if (userIds.length > 0) {
+            await Promise.all([
+                User.deleteMany({ _id: { $in: userIds } }).session(session),
+                Attempt.deleteMany({ userId: { $in: userIds } }).session(session),
+                StudentExamProgress.deleteMany({ studentId: { $in: userIds } }).session(session),
+                PracticeProgress.deleteMany({ studentId: { $in: userIds } }).session(session),
+                AuditLog.deleteMany({ userId: { $in: userIds } }).session(session),
+            ]);
+        }
+
+        await logAction({
+            userId: req.user._id,
+            action: 'DELETE',
+            targetModel: 'User',
+            details: `Bulk purged ${userIds.length} users and their associated records.`
+        }, { session });
+
+        await session.commitTransaction();
+        res.json({ success: true, message: `${userIds.length} users and all their data deleted permanently`, count: userIds.length });
+    } catch (error) {
+        await session.abortTransaction();
+        console.error('Bulk Delete Users Error:', error);
+        res.status(500).json({ success: false, message: 'Bulk purge failed' });
+    } finally {
+        session.endSession();
+    }
+};
+
 module.exports = {
     getColleges, createCollege, updateCollege, updateCollegeFeatures, deleteCollege,
-    getUsers,
-    getPlatformAnalytics,
-    getTrashedColleges, recoverCollege,
-    getTrashedExams, getTrashedQuestions, getTrashedResults,
-    recoverExam, recoverQuestion, recoverResult, bulkRecoverQuestions,
-    createCollegeAdmin,
-    getCollegeDetailedStats, exportCollegeStudents, exportCollegeQuestions,
-    getCollegeQuestions, getCollegeExams, getCollegeResults,
-    exportExamQuestions, exportExamResults, getTrashedUsers, recoverUser,
+    getUsers, toggleUserActive, updateUser, resetUserPassword, deleteUser, getTrashedUsers, recoverUser,
+    getPlatformAnalytics, getAuditLogs,
+    getTrashedColleges, recoverCollege, getTrashedExams, getTrashedQuestions, getTrashedResults, recoverExam, recoverQuestion, recoverResult, bulkRecoverQuestions,
+    getCollegeDetailedStats, getCollegeQuestions, getCollegeExams, getCollegeResults, exportCollegeStudents, exportCollegeQuestions, createCollegeAdmin,
+    exportExamQuestions, exportExamResults, toggleExamActive, toggleExamResults, deleteExam, deleteQuestion, bulkDeleteQuestions, getAuditLogs,
     deleteCollegePermanently, deleteUserPermanently, deleteExamPermanently, deleteQuestionPermanently, deleteResultPermanently,
-    getAuditLogs, toggleUserActive, updateUser, deleteUser, resetUserPassword, toggleExamActive, toggleExamResults, deleteExam, deleteQuestion,
+    bulkRecoverUsers, bulkRecoverExams, bulkRecoverResults, bulkDeleteQuestionsPermanently, bulkDeleteResultsPermanently, bulkDeleteExamsPermanently, bulkDeleteUsersPermanently,
 };

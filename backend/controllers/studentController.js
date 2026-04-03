@@ -2,6 +2,7 @@ const Question = require('../models/Question');
 const Attempt = require('../models/Attempt');
 const User = require('../models/User');
 const College = require('../models/College');
+const PracticeProgress = require('../models/PracticeProgress');
 const { generateResultPDF } = require('../utils/pdfGenerator');
 const { seededShuffle } = require('../utils/shuffle');
 
@@ -32,7 +33,47 @@ const getPracticeQuestions = async (req, res) => {
             return res.status(404).json({ success: false, message: 'No questions found for the given filters' });
         }
 
+        // Initialization of practice session: Create or Update Progress record
+        await PracticeProgress.findOneAndUpdate(
+            { studentId: req.user._id },
+            { 
+                collegeId: req.user.collegeId,
+                subject: subject || 'All',
+                questionIds: questions.map(q => q._id),
+                answers: {},
+                timeTaken: 0,
+                lastActiveAt: new Date()
+            },
+            { upsert: true, new: true }
+        );
+
         res.json({ success: true, questions, total: questions.length });
+    } catch (error) {
+        console.error('getPracticeQuestions Error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/** PUT /api/student/practice/save-progress */
+const savePracticeProgress = async (req, res) => {
+    try {
+        const { answers, timeTaken } = req.body;
+        // answers should be an object/map: { questionId: selectedOption }
+        
+        const updated = await PracticeProgress.findOneAndUpdate(
+            { studentId: req.user._id },
+            { 
+                $set: { 
+                    answers: answers || {}, 
+                    timeTaken: timeTaken || 0,
+                    lastActiveAt: new Date()
+                } 
+            },
+            { new: true }
+        );
+
+        if (!updated) return res.status(404).json({ success: false, message: 'No practice session found' });
+        res.json({ success: true, message: 'Progress saved' });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });
     }
@@ -41,7 +82,7 @@ const getPracticeQuestions = async (req, res) => {
 /** POST /api/student/submit-exam */
 const submitExam = async (req, res) => {
     try {
-        const { answers, timeTaken, mode = 'exam', negativeMarking = false } = req.body;
+        let { answers, timeTaken, mode = 'exam', negativeMarking = false } = req.body;
 
         if (mode === 'practice' || mode === 'exam') {
             const college = await College.findById(req.user.collegeId);
@@ -53,8 +94,20 @@ const submitExam = async (req, res) => {
             }
         }
 
+        // LIGHTWEIGHT SUBMIT for Practice: Use saved answers if not provided
         if (!answers || !Array.isArray(answers) || answers.length === 0) {
-            return res.status(400).json({ success: false, message: 'Answers are required' });
+            const savedProgress = await PracticeProgress.findOne({ studentId: req.user._id });
+            if (savedProgress && savedProgress.answers && savedProgress.answers.size > 0) {
+                // Use Map.entries() for Mongoose Map to avoid internal property leakage (like $__parent)
+                answers = Array.from(savedProgress.answers.entries()).map(([qId, opt]) => ({
+                    questionId: qId,
+                    selectedOption: opt
+                }));
+                console.log(`[Practice Submit] Using ${answers.length} saved answers from DB.`);
+                if (!timeTaken) timeTaken = savedProgress.timeTaken;
+            } else {
+                return res.status(400).json({ success: false, message: 'Answers are required' });
+            }
         }
 
         // ── DUPLICATE PREVENTION: 60s Debounce ────────────────────────────────
@@ -715,11 +768,10 @@ const getStudentSubjects = async (req, res) => {
 };
 
 module.exports = {
-    getPracticeQuestions, submitExam, getAttemptHistory, getAttemptById,
+    getPracticeQuestions, savePracticeProgress, submitExam, getAttemptHistory, getAttemptById,
     getDashboardStats, addBookmark, removeBookmark, getBookmarks,
     getLeaderboard, downloadResultPDF, getWrongQuestions, updateProfile,
     getStudentSubjects,
     // Session exam
     joinExamByCode, getSessionQuestions, submitSessionExam, getSessionResult, getMySessionResults,
 };
-

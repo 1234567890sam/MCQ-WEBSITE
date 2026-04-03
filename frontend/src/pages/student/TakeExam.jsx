@@ -5,7 +5,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../components/ConfirmModal';
 
-const AUTO_SAVE_INTERVAL = 15000;
+const AUTO_SAVE_INTERVAL = 10000;
 const MAX_WARNINGS = 3;
 const OPTS = ['A', 'B', 'C', 'D'];
 
@@ -127,7 +127,8 @@ export default function TakeExam() {
         try {
             document.exitFullscreen?.().catch(() => {});
             const timeTaken = Math.round((Date.now() - startRef.current) / 1000);
-            const { data } = await api.post(`/student-exam/exams/${id}/submit`, { answers: answersRef.current, timeTaken, autoSubmitted: auto });
+            // LIGHTWEIGHT SUBMIT: Send empty answers array. Backend will use the most recent auto-saved answers.
+            const { data } = await api.post(`/student-exam/exams/${id}/submit`, { answers: [], timeTaken, autoSubmitted: auto });
             localStorage.removeItem(`exam_code_${id}`);
             toast.success(auto ? 'Auto-submitted!' : 'Exam submitted!');
             navigate(`/result/${data.resultId}`, { replace: true });

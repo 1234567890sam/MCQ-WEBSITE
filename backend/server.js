@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const connectDB = require('./config/db');
 const { apiLimiter } = require('./middleware/rateLimiter');
+const { initCleanupTask } = require('./utils/cleanupTask');
 
 // Route imports
 const authRoutes = require('./routes/auth');
@@ -20,6 +21,9 @@ const app = express();
 
 // ── Connect Database ─────────────────────────────────────────────────────────
 connectDB();
+
+// ── Init Cleanup Tasks ───────────────────────────────────────────────────────
+initCleanupTask();
 
 // ── Security Middleware ──────────────────────────────────────────────────────
 app.use(helmet());

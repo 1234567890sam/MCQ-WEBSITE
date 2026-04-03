@@ -294,7 +294,7 @@ const generateSessionCode = () => {
 const createExamSession = async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ success: false, message: 'Questions file is required' });
-        const { title, subject, duration, negativeMarking, allowedStudentIds } = req.body;
+        const { title, subject, duration, type, negativeMarking, allowedStudentIds } = req.body;
         if (!title || !subject) return res.status(400).json({ success: false, message: 'Title and subject are required' });
 
         const { questions, errors } = parseSessionQuestionsExcel(req.file.buffer);
@@ -317,6 +317,7 @@ const createExamSession = async (req, res) => {
         const session = await ExamSession.create({
             sessionCode, testCode, title, subject, questions,
             duration: parseInt(duration) || 60,
+            type: type || 'exam',
             negativeMarking: negativeMarking === 'true',
             allowedStudents,
             collegeId: req.user.collegeId,

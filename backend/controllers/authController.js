@@ -5,7 +5,7 @@ const College = require('../models/College');
 
 const generateTokens = (userId) => {
     const accessToken = jwt.sign({ id: userId }, process.env.JWT_ACCESS_SECRET, {
-        expiresIn: process.env.JWT_ACCESS_EXPIRE || '15m',
+        expiresIn: process.env.JWT_ACCESS_EXPIRE || '1h',
     });
     const refreshToken = jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET, {
         expiresIn: process.env.JWT_REFRESH_EXPIRE || '7d',
@@ -15,8 +15,8 @@ const generateTokens = (userId) => {
 
 const cookieOpts = (req) => ({
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: true, // Always true since Render/Vercel use HTTPS, ensuring cross-site cookie support
+    sameSite: 'none', // Required for cross-site cookies between backend (Render) and frontend (Vercel)
     maxAge: 7 * 24 * 60 * 60 * 1000,
 });
 
