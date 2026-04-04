@@ -33,6 +33,7 @@ router.delete('/exams/:id', ...isTeacher, ctrl.deleteExam);
 // Student management on exam
 router.put('/exams/:id/students', ...isTeacher, ctrl.updateExamStudents);
 router.patch('/exams/:id/students/:studentId/allow-rejoin', ...isTeacher, ctrl.allowStudentRejoin);
+router.patch('/exams/:id/students/:studentId/reset', ...isTeacher, ctrl.resetStudentExam);
 
 // Results & Analytics
 router.get('/analytics', ...isTeacher, ctrl.getGeneralAnalytics);

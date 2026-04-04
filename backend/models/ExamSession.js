@@ -58,6 +58,13 @@ const examSessionSchema = new mongoose.Schema(
                 ref: 'User',
             },
         ],
+        // Teachers assigned by college admin to manage this exam
+        assignedTeachers: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'User',
+            },
+        ],
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',

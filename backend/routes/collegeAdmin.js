@@ -46,6 +46,11 @@ router.get('/exam-sessions/:id/results', ...isCollegeAdmin, ctrl.getSessionResul
 router.get('/exam-sessions/:id/export', ...isCollegeAdmin, ctrl.exportSessionResults);
 router.get('/exam-sessions/:id/test-code-excel', ...isCollegeAdmin, ctrl.downloadExamTestCodeExcel);
 router.delete('/exam-sessions/:id', ...isCollegeAdmin, ctrl.deleteExamSession);
+// Teacher assignment & live exam management
+router.patch('/exam-sessions/:id/assign-teachers', ...isCollegeAdmin, ctrl.assignTeachersToSession);
+router.get('/exam-sessions/:id/student-progress', ...isCollegeAdmin, ctrl.getSessionStudentProgress);
+router.patch('/exam-sessions/:id/students/:studentId/allow-rejoin', ...isCollegeAdmin, ctrl.allowStudentRejoinAdmin);
+router.patch('/exam-sessions/:id/students/:studentId/reset', ...isCollegeAdmin, ctrl.resetStudentExamAdmin);
 router.get('/eligible-students', ...isCollegeAdmin, ctrl.getEligibleStudents);
 
 // Analytics

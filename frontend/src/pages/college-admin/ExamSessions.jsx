@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../components/ConfirmModal';
-import { Plus, BookOpen, Users, ToggleLeft, ToggleRight, Eye, Download, Trash2, Shield, ShieldCheck, FileSpreadsheet, X, Clock, Search, ChevronRight, ChevronDown } from 'lucide-react';
+import { Plus, BookOpen, Users, ToggleLeft, ToggleRight, Eye, Download, Trash2, Shield, ShieldCheck, FileSpreadsheet, X, Clock, Search, ChevronRight, ChevronDown, Settings, UserCheck } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
 export default function ExamSessions() {
@@ -12,12 +12,14 @@ export default function ExamSessions() {
     const [creating, setCreating] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [examStudents, setExamStudents] = useState([]);
-    const [createdSession, setCreatedSession] = useState(null); // Success state
+    const [examTeachers, setExamTeachers] = useState([]);
+    const [createdSession, setCreatedSession] = useState(null);
 
     // Create form state
     const [form, setForm] = useState({ title: '', subject: '', duration: 60, negativeMarking: false });
     const [questionsFile, setQuestionsFile] = useState(null);
     const [selectedStudents, setSelectedStudents] = useState([]);
+    const [selectedTeachers, setSelectedTeachers] = useState([]);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedGroups, setExpandedGroups] = useState({});
@@ -37,7 +39,14 @@ export default function ExamSessions() {
         } catch { }
     };
 
-    useEffect(() => { fetchSessions(); fetchExamStudents(); }, []);
+    const fetchTeachers = async () => {
+        try {
+            const { data } = await api.get('/college-admin/teachers');
+            setExamTeachers(data.teachers || []);
+        } catch { }
+    };
+
+    useEffect(() => { fetchSessions(); fetchExamStudents(); fetchTeachers(); }, []);
 
     // Grouping logic
     const groupedStudents = examStudents.reduce((acc, student) => {
@@ -51,7 +60,7 @@ export default function ExamSessions() {
 
     const filteredGroups = Object.keys(groupedStudents).reduce((acc, dept) => {
         const semGroups = Object.keys(groupedStudents[dept]).reduce((sAcc, sem) => {
-            const students = groupedStudents[dept][sem].filter(s => 
+            const students = groupedStudents[dept][sem].filter(s =>
                 s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 s.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (s.studentId && s.studentId.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -86,14 +95,15 @@ export default function ExamSessions() {
         fd.append('duration', form.duration);
         fd.append('negativeMarking', form.negativeMarking);
         if (selectedStudents.length > 0) fd.append('allowedStudentIds', JSON.stringify(selectedStudents));
+        if (selectedTeachers.length > 0) fd.append('assignedTeacherIds', JSON.stringify(selectedTeachers));
         try {
             const { data } = await api.post('/college-admin/exam-sessions', fd);
             toast.success('Exam session created successfully!');
             setCreatedSession(data.session);
-            // Don't close immediately, show the codes
             setForm({ title: '', subject: '', duration: 60, negativeMarking: false });
             setQuestionsFile(null);
             setSelectedStudents([]);
+            setSelectedTeachers([]);
             fetchSessions();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to create exam');
@@ -198,7 +208,7 @@ export default function ExamSessions() {
                                     </div>
                                     <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#1e293b', marginBottom: '0.5rem' }}>Exam Session Published!</h3>
                                     <p style={{ color: '#64748b', fontSize: '0.9rem', maxWidth: 450, margin: '0 auto 1.5rem' }}>
-                                        The session for <strong>{createdSession.title}</strong> is now live. 
+                                        The session for <strong>{createdSession.title}</strong> is now live.
                                         Unique 6-digit test codes have been generated for all allowed students.
                                     </p>
 
@@ -243,6 +253,27 @@ export default function ExamSessions() {
                                                 </div>
                                                 <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Negative Marking (-0.25)</div>
                                             </div>
+                                            {/* Teacher Assignment */}
+                                            <div style={{ marginTop: '0.5rem', padding: '1rem', background: '#f0f9ff', borderRadius: '0.75rem', border: '1px solid #bae6fd' }}>
+                                                <label style={{ display: 'block', fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.6rem', color: '#0369a1' }}>
+                                                    <UserCheck size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                                                    Assign Teachers ({selectedTeachers.length} selected)
+                                                </label>
+                                                {examTeachers.length === 0 ? (
+                                                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>No teachers found in this college.</div>
+                                                ) : (
+                                                    <div style={{ maxHeight: 130, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                                        {examTeachers.map(t => (
+                                                            <label key={t._id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', cursor: 'pointer', padding: '0.3rem', borderRadius: '0.4rem', background: selectedTeachers.includes(t._id) ? 'rgba(14,165,233,0.1)' : 'transparent' }}>
+                                                                <input type="checkbox" checked={selectedTeachers.includes(t._id)}
+                                                                    onChange={e => setSelectedTeachers(prev => e.target.checked ? [...prev, t._id] : prev.filter(id => id !== t._id))} />
+                                                                <span style={{ fontWeight: 600 }}>{t.name}</span>
+                                                                <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{t.email}</span>
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
                                             <div>
                                                 <label style={{ display: 'block', fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.4rem' }}>
                                                     <FileSpreadsheet size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
@@ -267,12 +298,12 @@ export default function ExamSessions() {
                                                 <label style={{ fontWeight: 800, fontSize: '1rem' }}>Allowed Candidates ({selectedStudents.length})</label>
                                                 <div style={{ position: 'relative' }}>
                                                     <Search size={16} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                                                    <input 
-                                                        className="input" 
-                                                        placeholder="Search name, ID..." 
-                                                        value={searchTerm} 
+                                                    <input
+                                                        className="input"
+                                                        placeholder="Search name, ID..."
+                                                        value={searchTerm}
                                                         onChange={e => setSearchTerm(e.target.value)}
-                                                        style={{ padding: '0.4rem 0.75rem 0.4rem 2rem', fontSize: '0.85rem', width: 220, borderRadius: '0.5rem' }} 
+                                                        style={{ padding: '0.4rem 0.75rem 0.4rem 2rem', fontSize: '0.85rem', width: 220, borderRadius: '0.5rem' }}
                                                     />
                                                 </div>
                                             </div>
@@ -292,7 +323,7 @@ export default function ExamSessions() {
                                                                     <button type="button" onClick={() => toggleGroup(dept)} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}>
                                                                         {expandedGroups[dept] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                                                     </button>
-                                                                    <input type="checkbox" 
+                                                                    <input type="checkbox"
                                                                         checked={Object.values(filteredGroups[dept]).flat().every(s => selectedStudents.includes(s._id))}
                                                                         onChange={e => selectBatch(Object.values(filteredGroups[dept]).flat(), e.target.checked)}
                                                                     />
@@ -304,7 +335,7 @@ export default function ExamSessions() {
                                                                         {Object.keys(filteredGroups[dept]).map(sem => (
                                                                             <div key={sem} style={{ marginBottom: '0.4rem' }}>
                                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem', paddingLeft: '0.4rem' }}>
-                                                                                    <input type="checkbox" 
+                                                                                    <input type="checkbox"
                                                                                         checked={filteredGroups[dept][sem].every(s => selectedStudents.includes(s._id))}
                                                                                         onChange={e => selectBatch(filteredGroups[dept][sem], e.target.checked)}
                                                                                     />
@@ -321,7 +352,7 @@ export default function ExamSessions() {
                                                                                 </div>
                                                                             </div>
                                                                         ))}
-                                                                </div>
+                                                                    </div>
                                                                 )}
                                                             </div>
                                                         ))
@@ -342,80 +373,88 @@ export default function ExamSessions() {
                         </div>
                     </div>
                 </div>
-            )}
+            )
+            }
 
             {/* Sessions list */}
-            {loading ? (
-                <div style={{ textAlign: 'center', padding: '3rem' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-            ) : sessions.length === 0 ? (
-                <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-                    <BookOpen size={48} color="#10b981" style={{ margin: '0 auto 1rem', display: 'block' }} />
-                    <h3 style={{ fontWeight: 700, marginBottom: '0.5rem' }}>No exam sessions yet</h3>
-                    <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Create your first exam session to get started</p>
-                </div>
-            ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {sessions.map(session => (
-                        <div key={session._id} className="card" style={{ borderLeft: `4px solid ${session.isActive ? '#10b981' : '#e2e8f0'}` }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                                        <div style={{ fontWeight: 800, fontSize: '1rem' }}>{session.title}</div>
-                                        {/* Session code badge */}
-                                        <div style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', padding: '0.25rem 0.75rem', borderRadius: '9999px', fontWeight: 800, fontSize: '0.9rem', fontFamily: 'monospace', letterSpacing: '0.1em', border: '1px dashed #10b981' }}>
-                                            {session.sessionCode}
+            {
+                loading ? (
+                    <div style={{ textAlign: 'center', padding: '3rem' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+                ) : sessions.length === 0 ? (
+                    <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+                        <BookOpen size={48} color="#10b981" style={{ margin: '0 auto 1rem', display: 'block' }} />
+                        <h3 style={{ fontWeight: 700, marginBottom: '0.5rem' }}>No exam sessions yet</h3>
+                        <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Create your first exam session to get started</p>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {sessions.map(session => (
+                            <div key={session._id} className="card" style={{ borderLeft: `4px solid ${session.isActive ? '#10b981' : '#e2e8f0'}` }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                                            <div style={{ fontWeight: 800, fontSize: '1rem' }}>{session.title}</div>
+                                            {/* Session code badge */}
+                                            <div style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', padding: '0.25rem 0.75rem', borderRadius: '9999px', fontWeight: 800, fontSize: '0.9rem', fontFamily: 'monospace', letterSpacing: '0.1em', border: '1px dashed #10b981' }}>
+                                                {session.sessionCode}
+                                            </div>
+                                            <span className={`badge`} style={{ background: session.isActive ? 'rgba(16,185,129,0.1)' : 'rgba(100,116,139,0.1)', color: session.isActive ? '#10b981' : '#64748b' }}>
+                                                {session.isActive ? '● LIVE' : '○ Closed'}
+                                            </span>
+                                            {session.showResults && <span className="badge" style={{ background: 'rgba(6,182,212,0.1)', color: '#06b6d4' }}>Results Released</span>}
                                         </div>
-                                        <span className={`badge`} style={{ background: session.isActive ? 'rgba(16,185,129,0.1)' : 'rgba(100,116,139,0.1)', color: session.isActive ? '#10b981' : '#64748b' }}>
-                                            {session.isActive ? '● LIVE' : '○ Closed'}
-                                        </span>
-                                        {session.showResults && <span className="badge" style={{ background: 'rgba(6,182,212,0.1)', color: '#06b6d4' }}>Results Released</span>}
+                                        <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', fontSize: '0.82rem', color: '#64748b' }}>
+                                            <span><BookOpen size={12} style={{ verticalAlign: 'middle', marginRight: 3 }} />{session.subject}</span>
+                                            <span><Clock size={12} style={{ verticalAlign: 'middle', marginRight: 3 }} />{session.duration} min</span>
+                                            <span><Users size={12} style={{ verticalAlign: 'middle', marginRight: 3 }} />{session.attemptCount || 0} submitted</span>
+                                            <span style={{ color: '#94a3b8' }}>{new Date(session.createdAt).toLocaleDateString('en-IN')}</span>
+                                        </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', fontSize: '0.82rem', color: '#64748b' }}>
-                                        <span><BookOpen size={12} style={{ verticalAlign: 'middle', marginRight: 3 }} />{session.subject}</span>
-                                        <span><Clock size={12} style={{ verticalAlign: 'middle', marginRight: 3 }} />{session.duration} min</span>
-                                        <span><Users size={12} style={{ verticalAlign: 'middle', marginRight: 3 }} />{session.attemptCount || 0} submitted</span>
-                                        <span style={{ color: '#94a3b8' }}>{new Date(session.createdAt).toLocaleDateString('en-IN')}</span>
+                                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                        {/* Toggle Active */}
+                                        <button onClick={() => toggleActive(session)} title={session.isActive ? 'Close exam' : 'Open exam'}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: `1px solid ${session.isActive ? '#10b981' : '#e2e8f0'}`, background: session.isActive ? 'rgba(16,185,129,0.08)' : 'transparent', color: session.isActive ? '#10b981' : '#64748b', cursor: 'pointer', fontWeight: 600, fontSize: '0.78rem' }}>
+                                            {session.isActive ? <ToggleRight size={15} /> : <ToggleLeft size={15} />}
+                                            {session.isActive ? 'Close' : 'Open'}
+                                        </button>
+                                        {/* Toggle Results */}
+                                        <button onClick={() => toggleResults(session)} title={session.showResults ? 'Hide results' : 'Release results'}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: `1px solid ${session.showResults ? '#06b6d4' : '#e2e8f0'}`, background: session.showResults ? 'rgba(6,182,212,0.08)' : 'transparent', color: session.showResults ? '#06b6d4' : '#64748b', cursor: 'pointer', fontWeight: 600, fontSize: '0.78rem' }}>
+                                            {session.showResults ? <ShieldCheck size={15} /> : <Shield size={15} />}
+                                            {session.showResults ? 'Hide Results' : 'Release Results'}
+                                        </button>
+                                        {/* View Results */}
+                                        <NavLink to={`/college-admin/exam-sessions/${session._id}/results`}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', background: 'transparent', color: '#475569', cursor: 'pointer', fontWeight: 600, fontSize: '0.78rem', textDecoration: 'none' }}>
+                                            <Eye size={15} /> Results
+                                        </NavLink>
+                                        {/* Manage / Live Monitor */}
+                                        <NavLink to={`/college-admin/exam-sessions/${session._id}/manage`}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #f59e0b', background: 'rgba(245,158,11,0.08)', color: '#b45309', cursor: 'pointer', fontWeight: 600, fontSize: '0.78rem', textDecoration: 'none' }}>
+                                            <Settings size={15} /> Manage
+                                        </NavLink>
+                                        {/* Test Codes */}
+                                        <button onClick={() => downloadTestCodes(session._id, session.title)} title="Download Unique Test Codes"
+                                            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #8b5cf6', background: 'rgba(139,92,246,0.06)', color: '#8b5cf6', cursor: 'pointer', fontWeight: 600, fontSize: '0.78rem' }}>
+                                            <Shield size={15} /> All Codes
+                                        </button>
+                                        {/* Export */}
+                                        <button onClick={() => exportResults(session._id, session.sessionCode)} title="Export to Excel"
+                                            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #10b981', background: 'rgba(16,185,129,0.06)', color: '#10b981', cursor: 'pointer', fontWeight: 600, fontSize: '0.78rem' }}>
+                                            <Download size={15} /> Export
+                                        </button>
+                                        {/* Delete */}
+                                        <button onClick={() => deleteSession(session._id)}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #fee2e2', background: 'rgba(239,68,68,0.05)', color: '#ef4444', cursor: 'pointer', fontWeight: 600, fontSize: '0.78rem' }}>
+                                            <Trash2 size={15} />
+                                        </button>
                                     </div>
-                                </div>
-                                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                    {/* Toggle Active */}
-                                    <button onClick={() => toggleActive(session)} title={session.isActive ? 'Close exam' : 'Open exam'}
-                                        style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: `1px solid ${session.isActive ? '#10b981' : '#e2e8f0'}`, background: session.isActive ? 'rgba(16,185,129,0.08)' : 'transparent', color: session.isActive ? '#10b981' : '#64748b', cursor: 'pointer', fontWeight: 600, fontSize: '0.78rem' }}>
-                                        {session.isActive ? <ToggleRight size={15} /> : <ToggleLeft size={15} />}
-                                        {session.isActive ? 'Close' : 'Open'}
-                                    </button>
-                                    {/* Toggle Results */}
-                                    <button onClick={() => toggleResults(session)} title={session.showResults ? 'Hide results' : 'Release results'}
-                                        style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: `1px solid ${session.showResults ? '#06b6d4' : '#e2e8f0'}`, background: session.showResults ? 'rgba(6,182,212,0.08)' : 'transparent', color: session.showResults ? '#06b6d4' : '#64748b', cursor: 'pointer', fontWeight: 600, fontSize: '0.78rem' }}>
-                                        {session.showResults ? <ShieldCheck size={15} /> : <Shield size={15} />}
-                                        {session.showResults ? 'Hide Results' : 'Release Results'}
-                                    </button>
-                                    {/* View Results */}
-                                    <NavLink to={`/college-admin/exam-sessions/${session._id}/results`}
-                                        style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', background: 'transparent', color: '#475569', cursor: 'pointer', fontWeight: 600, fontSize: '0.78rem', textDecoration: 'none' }}>
-                                        <Eye size={15} /> Results
-                                    </NavLink>
-                                    {/* Test Codes */}
-                                    <button onClick={() => downloadTestCodes(session._id, session.title)} title="Download Unique Test Codes"
-                                        style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #8b5cf6', background: 'rgba(139,92,246,0.06)', color: '#8b5cf6', cursor: 'pointer', fontWeight: 600, fontSize: '0.78rem' }}>
-                                        <Shield size={15} /> All Codes
-                                    </button>
-                                    {/* Export */}
-                                    <button onClick={() => exportResults(session._id, session.sessionCode)} title="Export to Excel"
-                                        style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #10b981', background: 'rgba(16,185,129,0.06)', color: '#10b981', cursor: 'pointer', fontWeight: 600, fontSize: '0.78rem' }}>
-                                        <Download size={15} /> Export
-                                    </button>
-                                    {/* Delete */}
-                                    <button onClick={() => deleteSession(session._id)}
-                                        style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #fee2e2', background: 'rgba(239,68,68,0.05)', color: '#ef4444', cursor: 'pointer', fontWeight: 600, fontSize: '0.78rem' }}>
-                                        <Trash2 size={15} />
-                                    </button>
                                 </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
+                        ))}
+                    </div>
+                )
+            }
+        </div >
     );
 }

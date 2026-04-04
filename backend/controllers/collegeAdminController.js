@@ -7,6 +7,8 @@ const XLSX = require('xlsx');
 const { getStudentTestCode } = require('../utils/testCodeHelper');
 const { logAction } = require('../utils/auditLogger');
 const College = require('../models/College');
+const StudentExamProgress = require('../models/StudentExamProgress');
+const mongoose = require('mongoose');
 
 const ensureDepartmentExists = async (collegeId, dept) => {
     if (!dept) return;
@@ -32,10 +34,10 @@ const createTeacher = async (req, res) => {
         if (!name || !email || !password) return res.status(400).json({ success: false, message: 'Name, email and password required' });
         const existing = await User.findOne({ email });
         if (existing) return res.status(409).json({ success: false, message: 'Email already registered' });
-        
+
         await ensureDepartmentExists(req.user.collegeId, department);
         const teacher = await User.create({ name, email, password, role: 'teacher', collegeId: req.user.collegeId, department });
-        
+
         await logAction({
             userId: req.user._id,
             action: 'CREATE',
@@ -85,10 +87,10 @@ const createStudent = async (req, res) => {
         if (!name || !email || !password) return res.status(400).json({ success: false, message: 'Required fields missing' });
         const existing = await User.findOne({ email });
         if (existing) return res.status(409).json({ success: false, message: 'Email already registered' });
-        
+
         await ensureDepartmentExists(req.user.collegeId, department);
         const student = await User.create({ name, email, password, role: 'student', collegeId: req.user.collegeId, studentId, semester, department });
-        
+
         await logAction({
             userId: req.user._id,
             action: 'CREATE',
@@ -163,10 +165,10 @@ const uploadQuestions = async (req, res) => {
         const { valid, errors } = parseExcel(req.file.buffer);
         if (valid.length === 0) return res.status(400).json({ success: false, message: 'No valid questions found', errors });
 
-        const questionsToInsert = valid.map(q => ({ 
-            ...q, 
-            collegeId: req.user.collegeId, 
-            createdBy: req.user._id 
+        const questionsToInsert = valid.map(q => ({
+            ...q,
+            collegeId: req.user.collegeId,
+            createdBy: req.user._id
         }));
 
         const inserted = await Question.insertMany(questionsToInsert, { ordered: false }).catch(err => {
@@ -294,7 +296,7 @@ const generateSessionCode = () => {
 const createExamSession = async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ success: false, message: 'Questions file is required' });
-        const { title, subject, duration, type, negativeMarking, allowedStudentIds } = req.body;
+        const { title, subject, duration, type, negativeMarking, allowedStudentIds, assignedTeacherIds } = req.body;
         if (!title || !subject) return res.status(400).json({ success: false, message: 'Title and subject are required' });
 
         const { questions, errors } = parseSessionQuestionsExcel(req.file.buffer);
@@ -312,7 +314,12 @@ const createExamSession = async (req, res) => {
             try { allowedStudents = JSON.parse(allowedStudentIds); } catch { }
         }
 
-        const testCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit random number
+        let assignedTeachers = [];
+        if (assignedTeacherIds) {
+            try { assignedTeachers = JSON.parse(assignedTeacherIds); } catch { }
+        }
+
+        const testCode = Math.floor(100000 + Math.random() * 900000).toString();
 
         const session = await ExamSession.create({
             sessionCode, testCode, title, subject, questions,
@@ -320,6 +327,7 @@ const createExamSession = async (req, res) => {
             type: type || 'exam',
             negativeMarking: negativeMarking === 'true',
             allowedStudents,
+            assignedTeachers,
             collegeId: req.user.collegeId,
             createdBy: req.user._id,
             createdByRole: 'college-admin'
@@ -330,10 +338,144 @@ const createExamSession = async (req, res) => {
             action: 'CREATE',
             targetModel: 'ExamSession',
             targetId: session._id,
-            details: `Created exam session: ${session.title} (${session.sessionCode})`
+            details: `Created exam session: ${session.title} (${session.sessionCode}), assigned ${assignedTeachers.length} teacher(s)`
         });
 
         res.status(201).json({ success: true, session, sessionCode });
+    } catch (error) {
+        console.error('Create session error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/**
+ * PATCH /api/college/exam-sessions/:id/assign-teachers
+ * Update which teachers are assigned to manage an exam.
+ */
+const assignTeachersToSession = async (req, res) => {
+    try {
+        const { teacherIds, assignedTeacherIds } = req.body;
+        const ids = teacherIds || assignedTeacherIds;
+        if (!Array.isArray(ids)) {
+            return res.status(400).json({ success: false, message: 'Teacher IDs must be an array' });
+        }
+
+        // Validate that all ids belong to teachers of this college
+        const teachers = await User.find({
+            _id: { $in: ids },
+            collegeId: req.user.collegeId,
+            role: 'teacher',
+            isDeleted: false,
+        }).select('_id name email');
+
+        const session = await ExamSession.findOneAndUpdate(
+            { _id: req.params.id, collegeId: req.user.collegeId },
+            { assignedTeachers: teachers.map(t => t._id) },
+            { new: true }
+        ).populate('assignedTeachers', 'name email');
+
+        if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
+
+        await logAction({
+            userId: req.user._id,
+            action: 'UPDATE',
+            targetModel: 'ExamSession',
+            targetId: session._id,
+            details: `Assigned teachers [${teachers.map(t => t.name).join(', ')}] to exam: ${session.title}`
+        });
+
+        res.json({ success: true, message: `${teachers.length} teacher(s) assigned`, session });
+    } catch (error) {
+        console.error('Assign teachers error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/**
+ * GET /api/college/exam-sessions/:id/student-progress
+ * Returns all students' progress for a session (admin exam management panel).
+ */
+const getSessionStudentProgress = async (req, res) => {
+    try {
+        const session = await ExamSession.findOne({ _id: req.params.id, collegeId: req.user.collegeId });
+        if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
+
+        const progressList = await StudentExamProgress.find({ examSessionId: req.params.id })
+            .populate('studentId', 'name email studentId department semester')
+            .lean();
+
+        res.json({ success: true, progress: progressList, sessionCode: session.sessionCode });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/**
+ * PATCH /api/college/exam-sessions/:id/students/:studentId/allow-rejoin
+ * College admin allows a student to rejoin (resets warning/rejoin counts).
+ */
+const allowStudentRejoinAdmin = async (req, res) => {
+    try {
+        const { id, studentId } = req.params;
+
+        const session = await ExamSession.findOne({ _id: id, collegeId: req.user.collegeId });
+        if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
+
+        const progress = await StudentExamProgress.findOne({ examSessionId: id, studentId });
+        if (!progress) return res.status(404).json({ success: false, message: 'No active progress for this student' });
+
+        progress.rejoinCount = 0;
+        progress.warningCount = 0;
+        progress.status = 'in-progress';
+        progress.rejoinToken = null;
+        progress.lastActiveAt = new Date();
+        await progress.save();
+
+        await logAction({
+            userId: req.user._id,
+            action: 'UPDATE',
+            targetModel: 'StudentExamProgress',
+            targetId: progress._id,
+            details: `Admin allowed rejoin for student ${studentId} in session ${id}`
+        });
+
+        res.json({ success: true, message: 'Student rejoin allowed. Counts have been reset.' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/**
+ * PATCH /api/college/exam-sessions/:id/students/:studentId/reset
+ * College admin fully resets a student's exam progress and attempts.
+ */
+const resetStudentExamAdmin = async (req, res) => {
+    try {
+        const { id, studentId } = req.params;
+
+        const session = await ExamSession.findOne({ _id: id, collegeId: req.user.collegeId });
+        if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
+
+        const deletedProgress = await StudentExamProgress.findOneAndDelete({ examSessionId: id, studentId });
+        const deletedAttempt = await Attempt.updateMany(
+            { examSessionId: id, userId: studentId, isDeleted: false },
+            { isDeleted: true, deletedAt: new Date() }
+        );
+
+        await logAction({
+            userId: req.user._id,
+            action: 'DELETE',
+            targetModel: 'StudentExamProgress',
+            targetId: deletedProgress?._id,
+            details: `Admin reset exam for student ${studentId} in session ${id} — ${deletedAttempt.modifiedCount} attempt(s) removed`
+        });
+
+        res.json({
+            success: true,
+            message: 'Student exam fully reset. They can start fresh.',
+            attemptsRemoved: deletedAttempt.modifiedCount,
+            progressDeleted: !!deletedProgress,
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });
     }
@@ -575,7 +717,7 @@ const getCollegeDashboard = async (req, res) => {
         const cid = req.user.collegeId;
 
         const [
-            totalStudents, totalTeachers, totalExams, activeStudents, 
+            totalStudents, totalTeachers, totalExams, activeStudents,
             passingUsers, avgAccuracyData
         ] = await Promise.all([
             User.countDocuments({ collegeId: cid, role: 'student', isDeleted: false }),
@@ -806,9 +948,9 @@ const downloadSampleExcel = async (req, res) => {
 
         if (type === 'students') {
             data = [
-                { 
-                    'STUDENT ID': '2024-CSC-001', 
-                    'NAME': 'John Doe', 
+                {
+                    'STUDENT ID': '2024-CSC-001',
+                    'NAME': 'John Doe',
                     'EMAIL': 'john@example.com',
                     'DEPARTMENT': 'Computer Science',
                     'SEMESTER': '6',
@@ -827,7 +969,7 @@ const downloadSampleExcel = async (req, res) => {
             }];
             filename = 'exam_questions_sample.xlsx';
         } else if (type === 'bulk-questions') {
-             data = [{
+            data = [{
                 'QUESTION': 'How many continents are there?',
                 'OPTION A': '5', 'OPTION B': '6', 'OPTION C': '7', 'OPTION D': '8',
                 'ANSWER': 'C', 'SUBJECT': 'Geography', 'COs': 'CO1', 'MARKS': 1
@@ -846,7 +988,7 @@ const downloadSampleExcel = async (req, res) => {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('Pragma', 'no-cache');
         res.setHeader('Expires', '0');
-        
+
         console.log(`Sending Excel file: ${filename} (${buffer.length} bytes)`);
         return res.status(200).end(buffer);
     } catch (error) {
@@ -861,9 +1003,9 @@ const downloadExamTestCodeExcel = async (req, res) => {
         const exam = await ExamSession.findOne({ _id: req.params.id, collegeId: req.user.collegeId })
             .populate('allowedStudents', 'name studentId email')
             .lean();
-            
+
         if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
-        
+
         const ExcelJS = require('exceljs');
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Exam Attendance');
@@ -874,7 +1016,7 @@ const downloadExamTestCodeExcel = async (req, res) => {
         topHeader.value = `EXAM: ${exam.title.toUpperCase()} (${exam.subject.toUpperCase()})`;
         topHeader.font = { bold: true, size: 14, color: { argb: 'FF1E293B' } };
         topHeader.alignment = { horizontal: 'center' };
-        
+
         worksheet.mergeCells('A2:D2');
         const codeHeader = worksheet.getCell('A2');
         codeHeader.value = `NOTE: EVERY STUDENT HAS A UNIQUE 6-DIGIT TEST CODE`;
@@ -891,7 +1033,7 @@ const downloadExamTestCodeExcel = async (req, res) => {
             cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF8B5CF6' } };
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
-            cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+            cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
         });
 
         // Students Data
@@ -908,7 +1050,7 @@ const downloadExamTestCodeExcel = async (req, res) => {
             const row = worksheet.addRow([i + 1, s.name, s.studentId || s.email, studentCode]);
             row.alignment = { vertical: 'middle' };
             row.eachCell(cell => {
-                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
             });
             // Center the # and Test Code columns
             row.getCell(1).alignment = { horizontal: 'center' };
@@ -934,6 +1076,7 @@ const downloadExamTestCodeExcel = async (req, res) => {
 };
 
 module.exports = {
+
     getTeachers, createTeacher, toggleTeacherActive, deleteTeacher,
     getStudents, createStudent, toggleStudentActive, deleteStudent,
     getCollegeExams,
@@ -945,7 +1088,10 @@ module.exports = {
     downloadSampleExcel,
     // Migrated admin functions
     uploadQuestions, getQuestions, updateQuestion, deleteQuestion, deleteQuestionsBySubject, getSubjects,
-    createExamSession, getExamSessions, getExamSession, toggleSessionActive, 
+    createExamSession, getExamSessions, getExamSession, toggleSessionActive,
     toggleSessionResults, getSessionResults, exportSessionResults, deleteExamSession,
-    getEligibleStudents, downloadExamTestCodeExcel, getDepartments
+    getEligibleStudents, downloadExamTestCodeExcel, getDepartments,
+    // Teacher assignment & management
+    assignTeachersToSession, getSessionStudentProgress,
+    allowStudentRejoinAdmin, resetStudentExamAdmin,
 };

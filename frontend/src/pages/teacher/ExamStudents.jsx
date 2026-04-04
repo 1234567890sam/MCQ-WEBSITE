@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, UserPlus, UserMinus, Search, Users } from 'lucide-react';
+import { ArrowLeft, UserPlus, UserMinus, Search, Users, RotateCcw } from 'lucide-react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 
@@ -21,7 +21,7 @@ export default function ExamStudents() {
             ]);
             setExam(examRes.data.exam);
             setAllStudents(studRes.data.students);
-            
+
             // Map progress by studentId
             const pMap = {};
             (examRes.data.progress || []).forEach(p => {
@@ -63,6 +63,15 @@ export default function ExamStudents() {
             toast.success('Rejoin allowed');
             fetchData();
         } catch { toast.error('Failed to allow rejoin'); }
+    };
+
+    const handleReset = async (studentId, studentName) => {
+        if (!confirm(`Are you sure you want to RESET ${studentName}'s exam? This will delete all progress and any submitted attempt. This cannot be undone.`)) return;
+        try {
+            await api.patch(`/teacher/exams/${id}/students/${studentId}/reset`);
+            toast.success('Exam reset successfully');
+            fetchData();
+        } catch { toast.error('Failed to reset exam'); }
     };
 
     const filtered = allStudents.filter(s =>
@@ -125,9 +134,9 @@ export default function ExamStudents() {
                                             {added && (
                                                 progressMap[s._id] ? (
                                                     <div>
-                                                        <div style={{ 
-                                                            fontSize: '0.75rem', 
-                                                            fontWeight: 700, 
+                                                        <div style={{
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 700,
                                                             color: progressMap[s._id].status === 'blocked' ? '#ef4444' : '#6366f1',
                                                             textTransform: 'capitalize'
                                                         }}>
@@ -146,6 +155,11 @@ export default function ExamStudents() {
                                             {added && progressMap[s._id] && (progressMap[s._id].rejoinCount > 0 || progressMap[s._id].status === 'blocked') && (
                                                 <button onClick={() => handleAllowRejoin(s._id)} className="btn-secondary" style={{ fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: '#fef3c7', color: '#92400e', borderColor: '#fde68a' }}>
                                                     Allow Rejoin
+                                                </button>
+                                            )}
+                                            {added && progressMap[s._id] && (
+                                                <button onClick={() => handleReset(s._id, s.name)} className="btn-secondary" style={{ fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: '#fee2e2', color: '#991b1b', borderColor: '#fecaca' }}>
+                                                    <RotateCcw size={12} style={{ marginRight: 4, display: 'inline' }} /> Reset
                                                 </button>
                                             )}
                                             <button onClick={() => handleToggle(s._id, !added)} className={added ? "btn-danger" : "btn-secondary"} style={{ fontSize: '0.75rem', padding: '0.4rem 0.8rem' }}>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileText, Trash2, Clock, PlusCircle, Users, BarChart2, BookOpen, Eye, EyeOff, CheckSquare, Square, ToggleLeft, ToggleRight } from 'lucide-react';
+import { FileText, Trash2, Clock, PlusCircle, Users, BarChart2, BookOpen, Eye, EyeOff, CheckSquare, Square, ToggleLeft, ToggleRight, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
@@ -130,6 +130,10 @@ export default function TeacherManageExams() {
                                     {/* Action buttons */}
                                     <td style={{ textAlign: 'right' }}>
                                         <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                                            <Link to={`/teacher/exams/${e._id}/manage`} className="btn-secondary"
+                                                style={{ padding: '0.35rem 0.55rem', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#b45309', borderColor: '#f59e0b', background: 'rgba(245,158,11,0.08)' }}>
+                                                <Settings size={13} /> Manage
+                                            </Link>
                                             <Link to={`/teacher/exams/${e._id}/students`} className="btn-secondary"
                                                 style={{ padding: '0.35rem 0.55rem', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                                                 <Users size={13} /> Students

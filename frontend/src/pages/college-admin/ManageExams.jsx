@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Search, FileText, Trash2, Clock, CheckCircle, X, ExternalLink } from 'lucide-react';
+import { Search, FileText, Trash2, Clock, CheckCircle, X, ExternalLink, Settings } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 
@@ -82,9 +83,14 @@ export default function CollegeManageExams() {
                                         </span>
                                     </td>
                                     <td style={{ textAlign: 'right' }}>
-                                        <button onClick={() => handleDelete(e._id)} className="btn-danger" style={{ padding: '0.4rem' }}>
-                                            <Trash2 size={16} />
-                                        </button>
+                                        <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                                            <Link to={`/college-admin/exam-sessions/${e._id}/manage`} className="btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#b45309', borderColor: '#f59e0b', background: 'rgba(245,158,11,0.08)' }}>
+                                                <Settings size={14} /> Manage
+                                            </Link>
+                                            <button onClick={() => handleDelete(e._id)} className="btn-danger" style={{ padding: '0.4rem' }}>
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

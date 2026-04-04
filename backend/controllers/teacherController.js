@@ -17,10 +17,10 @@ const uploadQuestions = async (req, res) => {
         const { valid, errors } = parseExcel(req.file.buffer);
         if (valid.length === 0) return res.status(400).json({ success: false, message: 'No valid questions found', errors });
 
-        const questionsToInsert = valid.map(q => ({ 
-            ...q, 
-            collegeId: req.user.collegeId, 
-            createdBy: req.user._id 
+        const questionsToInsert = valid.map(q => ({
+            ...q,
+            collegeId: req.user.collegeId,
+            createdBy: req.user._id
         }));
 
         const inserted = await Question.insertMany(questionsToInsert, { ordered: false }).catch(err => {
@@ -82,7 +82,7 @@ const updateQuestion = async (req, res) => {
             { new: true, runValidators: true }
         );
         if (!question) return res.status(404).json({ success: false, message: 'Question not found' });
-        
+
         await logAction({
             userId: req.user._id,
             action: 'UPDATE',
@@ -105,7 +105,7 @@ const deleteQuestion = async (req, res) => {
             { isDeleted: true, deletedAt: new Date() }
         );
         if (!question) return res.status(404).json({ success: false, message: 'Question not found' });
-        
+
         await logAction({
             userId: req.user._id,
             action: 'DELETE',
@@ -143,14 +143,33 @@ const deleteQuestionsBySubject = async (req, res) => {
 
 // ── Exam CRUD ────────────────────────────────────────────────────────────────
 
+/**
+ * Helper: returns true if the current user created the exam OR is assigned to it.
+ * Used universally so college-admin-created exams are visible to assigned teachers.
+ */
+const canAccessExam = (exam, userId) => {
+    if (!exam) return false;
+    const uid = String(userId);
+    if (String(exam.createdBy?._id || exam.createdBy) === uid) return true;
+    if (exam.assignedTeachers?.some(t => String(t._id || t) === uid)) return true;
+    return false;
+};
+
 /** GET /api/teacher/exams */
 const getMyExams = async (req, res) => {
     try {
         const exams = await ExamSession.find({
-            createdBy: req.user._id,
+            $or: [
+                { createdBy: req.user._id },
+                { assignedTeachers: req.user._id },
+            ],
             collegeId: req.user.collegeId,
             isDeleted: false,
-        }).sort('-createdAt').lean();
+        })
+            .populate('createdBy', 'name')
+            .populate('assignedTeachers', 'name')
+            .sort('-createdAt')
+            .lean();
         res.json({ success: true, exams });
     } catch (e) { res.status(500).json({ success: false, message: 'Server error' }); }
 };
@@ -189,7 +208,7 @@ const createExam = async (req, res) => {
                     marks: q.points || q.marks || 1
                 };
             });
-        } 
+        }
         // 2. If selecting from bank
         else if (questionIds?.length > 0) {
             const bankQuestions = await Question.find({ _id: { $in: questionIds }, collegeId: req.user.collegeId, isDeleted: false }).lean();
@@ -243,13 +262,21 @@ const createExam = async (req, res) => {
 /** PUT /api/teacher/exams/:id */
 const updateExam = async (req, res) => {
     try {
-        const exam = await ExamSession.findOne({ _id: req.params.id, createdBy: req.user._id, isDeleted: false });
-        if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
+        const exam = await ExamSession.findOne({ _id: req.params.id, isDeleted: false });
+        if (!exam || !canAccessExam(exam, req.user._id)) {
+            return res.status(404).json({ success: false, message: 'Exam not found or access denied' });
+        }
 
         const allowed = ['title', 'subject', 'description', 'type', 'duration', 'passingMarks', 'negativeMarking', 'isActive', 'showResults', 'showQA'];
         allowed.forEach((field) => { if (req.body[field] !== undefined) exam[field] = req.body[field]; });
+
+        // Allow updating assignedTeachers (only the creator can do this)
+        if (req.body.assignedTeachers !== undefined && String(exam.createdBy) === String(req.user._id)) {
+            exam.assignedTeachers = req.body.assignedTeachers;
+        }
+
         await exam.save();
-        
+
         await logAction({
             userId: req.user._id,
             action: 'UPDATE',
@@ -262,13 +289,23 @@ const updateExam = async (req, res) => {
     } catch (e) { res.status(500).json({ success: false, message: 'Server error' }); }
 };
 
-/** DELETE /api/teacher/exams/:id (soft) */
+/** DELETE /api/teacher/exams/:id (soft) — only creator can delete */
 const deleteExam = async (req, res) => {
     try {
-        await ExamSession.findOneAndUpdate(
-            { _id: req.params.id, createdBy: req.user._id },
+        const exam = await ExamSession.findOneAndUpdate(
+            { _id: req.params.id, createdBy: req.user._id, collegeId: req.user.collegeId },
             { isDeleted: true, deletedAt: new Date() }
         );
+        if (!exam) return res.status(404).json({ success: false, message: 'Exam not found or you are not the creator' });
+
+        await logAction({
+            userId: req.user._id,
+            action: 'DELETE',
+            targetModel: 'ExamSession',
+            targetId: exam._id,
+            details: `Deleted exam: ${exam.title}`
+        });
+
         res.json({ success: true, message: 'Exam deleted' });
     } catch (e) { res.status(500).json({ success: false, message: 'Server error' }); }
 };
@@ -276,14 +313,18 @@ const deleteExam = async (req, res) => {
 /** GET /api/teacher/exams/:id */
 const getExamById = async (req, res) => {
     try {
-        const exam = await ExamSession.findOne({
-            _id: req.params.id, createdBy: req.user._id, isDeleted: false
-        }).populate('allowedStudents', 'name email studentId department semester').lean();
-        if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
+        const exam = await ExamSession.findOne({ _id: req.params.id, isDeleted: false })
+            .populate('allowedStudents', 'name email studentId department semester')
+            .populate('assignedTeachers', 'name email')
+            .populate('createdBy', 'name email')
+            .lean();
+        if (!exam || !canAccessExam(exam, req.user._id)) {
+            return res.status(404).json({ success: false, message: 'Exam not found or access denied' });
+        }
 
         // Also fetch progress for all students in this exam
         const progressList = await StudentExamProgress.find({ examSessionId: req.params.id }).lean();
-        
+
         res.json({ success: true, exam, progress: progressList });
     } catch (e) { res.status(500).json({ success: false, message: 'Server error' }); }
 };
@@ -313,8 +354,10 @@ const updateExamStudents = async (req, res) => {
 /** GET /api/teacher/exams/:id/results */
 const getExamResults = async (req, res) => {
     try {
-        const exam = await ExamSession.findOne({ _id: req.params.id, createdBy: req.user._id });
-        if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
+        const exam = await ExamSession.findOne({ _id: req.params.id, isDeleted: false });
+        if (!exam || !canAccessExam(exam, req.user._id)) {
+            return res.status(404).json({ success: false, message: 'Exam not found or access denied' });
+        }
 
         const results = await Attempt.find({ examSessionId: req.params.id, mode: 'exam', isDeleted: false })
             .populate('userId', 'name email studentId semester department')
@@ -330,8 +373,10 @@ const getExamResults = async (req, res) => {
 /** GET /api/teacher/exams/:id/analytics */
 const getExamAnalytics = async (req, res) => {
     try {
-        const exam = await ExamSession.findOne({ _id: req.params.id, createdBy: req.user._id });
-        if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
+        const exam = await ExamSession.findOne({ _id: req.params.id, isDeleted: false });
+        if (!exam || !canAccessExam(exam, req.user._id)) {
+            return res.status(404).json({ success: false, message: 'Exam not found or access denied' });
+        }
 
         const results = await Attempt.find({ examSessionId: req.params.id, mode: 'exam', isDeleted: false })
             .populate('userId', 'name email')
@@ -361,7 +406,7 @@ const getExamAnalytics = async (req, res) => {
             });
 
             const successRate = total > 0 ? (correctCount / total) * 100 : 0;
-            
+
             // Map to COs
             if (q.cos && typeof q.cos === 'string') {
                 const coList = q.cos.split(',').map(s => s.trim()).filter(Boolean);
@@ -429,8 +474,10 @@ const exportExamResults = async (req, res) => {
         const { generateExcel, generateCSV, generatePDF } = require('../utils/exportHelpers');
         const format = req.query.format || 'excel';
 
-        const exam = await ExamSession.findOne({ _id: req.params.id, createdBy: req.user._id });
-        if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
+        const exam = await ExamSession.findOne({ _id: req.params.id, isDeleted: false });
+        if (!exam || !canAccessExam(exam, req.user._id)) {
+            return res.status(404).json({ success: false, message: 'Exam not found or access denied' });
+        }
 
         const results = await Attempt.find({ examSessionId: req.params.id, mode: 'exam', isDeleted: false })
             .populate('userId', 'name email studentId semester department')
@@ -547,7 +594,7 @@ const getGeneralAnalytics = async (req, res) => {
         const totalAttempts = attempts.length;
         const totalPassed = attempts.filter(a => a.passed).length;
         const avgScore = totalAttempts > 0 ? (attempts.reduce((sum, a) => sum + a.percentage, 0) / totalAttempts) : 0;
-        
+
         const recentAttempts = attempts.map(a => ({
             studentName: a.userId?.name || 'Unknown',
             examTitle: exams.find(e => e._id.toString() === a.examSessionId.toString())?.title || 'Unknown',
@@ -642,7 +689,7 @@ const downloadSampleQuestions = async (req, res) => {
             'OPTION A': '3', 'OPTION B': '4', 'OPTION C': '5', 'OPTION D': '6',
             'ANSWER': 'B', 'SUBJECT': 'Math', 'COs': 'CO3', 'MARKS': 1
         }];
-        
+
         const buffer = generateExcel(data, 'SampleQuestions');
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -718,7 +765,7 @@ const updateAttemptAnswer = async (req, res) => {
             // Manual override of correctness status
             attempt.answers[idx].isCorrect = isCorrect;
         }
-        
+
         // Mark the individual answer subdocument as modified
         attempt.markModified('answers');
 
@@ -745,7 +792,7 @@ const updateAttemptAnswer = async (req, res) => {
         attempt.correctCount = correctCount;
         attempt.wrongCount = wrongCount;
         attempt.skippedCount = skippedCount;
-        
+
         if (attempt.maxScore > 0) {
             attempt.percentage = (attempt.score / attempt.maxScore) * 100;
             attempt.accuracy = attempt.percentage;
@@ -771,9 +818,9 @@ const downloadExamTestCodeExcel = async (req, res) => {
         const exam = await ExamSession.findById(req.params.id)
             .populate('allowedStudents', 'name studentId email')
             .lean();
-            
+
         if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
-        
+
         const ExcelJS = require('exceljs');
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Exam Attendance');
@@ -784,7 +831,7 @@ const downloadExamTestCodeExcel = async (req, res) => {
         topHeader.value = `EXAM: ${exam.title.toUpperCase()} (${exam.subject.toUpperCase()})`;
         topHeader.font = { bold: true, size: 14, color: { argb: 'FF1E293B' } };
         topHeader.alignment = { horizontal: 'center' };
-        
+
         worksheet.mergeCells('A2:D2');
         const codeHeader = worksheet.getCell('A2');
         codeHeader.value = `NOTE: EVERY STUDENT HAS A UNIQUE 6-DIGIT TEST CODE`;
@@ -801,7 +848,7 @@ const downloadExamTestCodeExcel = async (req, res) => {
             cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF8B5CF6' } };
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
-            cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+            cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
         });
 
         // Students Data
@@ -819,7 +866,7 @@ const downloadExamTestCodeExcel = async (req, res) => {
             const row = worksheet.addRow([i + 1, s.name, s.studentId || s.email, studentCode]);
             row.alignment = { vertical: 'middle' };
             row.eachCell(cell => {
-                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
             });
             // Center the # and Test Code columns
             row.getCell(1).alignment = { horizontal: 'center' };
@@ -848,16 +895,22 @@ const downloadExamTestCodeExcel = async (req, res) => {
 const allowStudentRejoin = async (req, res) => {
     try {
         const { id, studentId } = req.params;
-        // Assuming StudentExamProgress and logAction are imported or defined elsewhere
-        const StudentExamProgress = require('../models/StudentExamProgress'); // Assuming path
-        const logAction = require('../utils/logAction'); // Assuming path
+
+        // Verify the requesting user can access this exam
+        const exam = await ExamSession.findOne({ _id: id, isDeleted: false });
+        if (!exam || !canAccessExam(exam, req.user._id)) {
+            return res.status(404).json({ success: false, message: 'Exam not found or access denied' });
+        }
 
         const progress = await StudentExamProgress.findOne({ examSessionId: id, studentId });
         if (!progress) return res.status(404).json({ success: false, message: 'No progress found for this student' });
 
+        // Reset rejoin count and unblock student
         progress.rejoinCount = 0;
+        progress.warningCount = 0;
         progress.status = 'in-progress';
         progress.rejoinToken = null;
+        progress.lastActiveAt = new Date();
         await progress.save();
 
         await logAction({
@@ -865,12 +918,56 @@ const allowStudentRejoin = async (req, res) => {
             action: 'UPDATE',
             targetModel: 'StudentExamProgress',
             targetId: progress._id,
-            details: `Allowed rejoin for student ${studentId} in exam ${id}`
+            details: `Allowed rejoin for student ${studentId} in exam ${id} (rejoin & warning counts reset)`
         });
 
-        res.json({ success: true, message: 'Student allowed to rejoin. Rejoin count reset.' });
+        res.json({ success: true, message: 'Student can rejoin. Rejoin and warning counts have been reset.' });
     } catch (e) {
         console.error(e);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/**
+ * PATCH /api/teacher/exams/:id/students/:studentId/reset
+ * Fully resets a student's exam — deletes their progress and any submitted attempt,
+ * allowing them to start the exam completely from scratch.
+ */
+const resetStudentExam = async (req, res) => {
+    try {
+        const { id, studentId } = req.params;
+
+        // Verify the requesting user can access this exam
+        const exam = await ExamSession.findOne({ _id: id, isDeleted: false });
+        if (!exam || !canAccessExam(exam, req.user._id)) {
+            return res.status(404).json({ success: false, message: 'Exam not found or access denied' });
+        }
+
+        // Delete in-progress session data
+        const deletedProgress = await StudentExamProgress.findOneAndDelete({ examSessionId: id, studentId });
+
+        // Soft-delete any submitted attempt(s) so leaderboard is clean
+        const deletedAttempt = await Attempt.updateMany(
+            { examSessionId: id, userId: studentId, isDeleted: false },
+            { isDeleted: true, deletedAt: new Date() }
+        );
+
+        await logAction({
+            userId: req.user._id,
+            action: 'DELETE',
+            targetModel: 'StudentExamProgress',
+            targetId: deletedProgress?._id,
+            details: `Reset exam for student ${studentId} in exam ${id} — progress deleted, ${deletedAttempt.modifiedCount} attempt(s) removed`
+        });
+
+        res.json({
+            success: true,
+            message: 'Student exam has been fully reset. They can now start the exam fresh.',
+            attemptsRemoved: deletedAttempt.modifiedCount,
+            progressDeleted: !!deletedProgress,
+        });
+    } catch (e) {
+        console.error('Reset student exam error:', e);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
@@ -891,5 +988,5 @@ module.exports = {
     // Attempt Management
     getAttemptDetails, updateAttemptAnswer,
     // Student Exam Progress Management
-    allowStudentRejoin,
+    allowStudentRejoin, resetStudentExam,
 };

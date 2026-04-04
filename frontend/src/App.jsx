@@ -35,6 +35,7 @@ import TeacherExamAnalytics from './pages/teacher/ExamAnalytics';
 import TeacherGeneralResults from './pages/teacher/Results';
 import TeacherManageQuestions from './pages/teacher/ManageQuestions';
 import TeacherUploadQuestions from './pages/teacher/UploadQuestions';
+import TeacherExamManage from './pages/teacher/ExamManage';
 
 // College Admin pages
 import CollegeAdminDashboard from './pages/college-admin/Dashboard';
@@ -47,6 +48,7 @@ import CAManageQuestions from './pages/college-admin/ManageQuestions';
 import CAUploadQuestions from './pages/college-admin/UploadQuestions';
 import CAExamSessions from './pages/college-admin/ExamSessions';
 import CAExamResults from './pages/college-admin/ExamResults';
+import CAExamManage from './pages/college-admin/ExamManage';
 
 // SaaS Admin pages
 import SaasDashboard from './pages/saas-admin/Dashboard';
@@ -119,6 +121,7 @@ function App() {
                 <Route path="/teacher/questions" element={<TeacherManageQuestions />} />
                 <Route path="/teacher/questions/upload" element={<TeacherUploadQuestions />} />
                 <Route path="/teacher/exams/:id/students" element={<TeacherExamStudents />} />
+                <Route path="/teacher/exams/:id/manage" element={<TeacherExamManage />} />
                 <Route path="/teacher/exams/:id/results" element={<TeacherExamResults />} />
                 <Route path="/teacher/exams/:id/analytics" element={<TeacherExamAnalytics />} />
             </Route>
@@ -133,6 +136,7 @@ function App() {
                 <Route path="/college-admin/questions/upload" element={<CAUploadQuestions />} />
                 <Route path="/college-admin/exam-sessions" element={<CAExamSessions />} />
                 <Route path="/college-admin/exam-sessions/:id/results" element={<CAExamResults />} />
+                <Route path="/college-admin/exam-sessions/:id/manage" element={<CAExamManage />} />
                 <Route path="/college-admin/exams" element={<CAManageExams />} />
                 <Route path="/college-admin/analytics" element={<CAAnalytics />} />
             </Route>
