@@ -5,7 +5,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../components/ConfirmModal';
 
-const AUTO_SAVE_INTERVAL = 10000;
+const AUTO_SAVE_INTERVAL = 12000; // 12s — keeps Render server awake & ensures frequent saves
 const MAX_WARNINGS = 3;
 const OPTS = ['A', 'B', 'C', 'D'];
 
@@ -62,6 +62,7 @@ export default function TakeExam() {
     const [loading, setLoading]         = useState(true);
     const [submitting, setSubmitting]   = useState(false);
     const [warnModal, setWarnModal]     = useState('');
+    const [lastSavedAt, setLastSavedAt] = useState(null);
 
     const timerRef      = useRef(null);
     const autoSaveRef   = useRef(null);
@@ -133,8 +134,20 @@ export default function TakeExam() {
         try {
             document.exitFullscreen?.().catch(() => {});
             const timeTaken = Math.round((Date.now() - startRef.current) / 1000);
-            // LIGHTWEIGHT SUBMIT: Send empty answers array. Backend will use the most recent auto-saved answers.
-            const { data } = await api.post(`/student-exam/exams/${id}/submit`, { answers: [], timeTaken, autoSubmitted: auto });
+            const currentAnswers = answersRef.current;
+
+            // Instant save before submit — ensures DB is up-to-date even if auto-save hasn't fired yet
+            try {
+                await api.put(`/student-exam/exams/${id}/save-progress`, {
+                    answers: currentAnswers,
+                    timeLeftSeconds: timeLeftRef.current,
+                    warningCount: warnCountRef.current,
+                });
+            } catch { /* non-critical — submit itself carries the answers */ }
+
+            // Send actual in-memory answers directly — eliminates race condition with auto-save.
+            // Even if student submits in the first 12s (before any auto-save), score will be correct.
+            const { data } = await api.post(`/student-exam/exams/${id}/submit`, { answers: currentAnswers, timeTaken, autoSubmitted: auto });
             localStorage.removeItem(`exam_code_${id}`);
             toast.success(auto ? 'Auto-submitted!' : 'Exam submitted!');
             navigate(`/result/${data.resultId}`, { replace: true });
@@ -306,7 +319,7 @@ export default function TakeExam() {
         return () => clearInterval(timerRef.current);
     }, [loading, doSubmit]);
 
-    // Auto-save
+    // Auto-save — runs every 12s to keep Render server awake & backup answers
     useEffect(() => {
         if (!exam) return;
         autoSaveRef.current = setInterval(() => {
@@ -314,7 +327,9 @@ export default function TakeExam() {
                 answers: answersRef.current, 
                 timeLeftSeconds: timeLeftRef.current, 
                 warningCount: warnCountRef.current 
-            }).catch(() => {});
+            })
+            .then(() => setLastSavedAt(new Date()))
+            .catch(() => {});
         }, AUTO_SAVE_INTERVAL);
         return () => clearInterval(autoSaveRef.current);
     }, [exam, id]);
@@ -380,7 +395,14 @@ export default function TakeExam() {
                     </div>
                     <div>
                         <div style={{ fontWeight: 800, fontSize: '0.875rem', color: '#1e293b', lineHeight: 1.2 }}>{exam.title}</div>
-                        <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{exam.subject} &nbsp;•&nbsp; {answered}/{questions.length} answered</div>
+                        <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                            {exam.subject} &nbsp;•&nbsp; {answered}/{questions.length} answered
+                            {lastSavedAt && (
+                                <span style={{ marginLeft: '0.5rem', color: '#10b981', fontWeight: 600 }}>
+                                    ✓ Saved {lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
 
