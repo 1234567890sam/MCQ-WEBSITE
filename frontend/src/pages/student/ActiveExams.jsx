@@ -12,6 +12,7 @@ export default function ActiveExams() {
     const [showCodeModal, setShowCodeModal] = useState(false);
     const [selectedExam, setSelectedExam] = useState(null);
     const [testCode, setTestCode] = useState('');
+    const [rejoining, setRejoining] = useState(false);
 
     useEffect(() => {
         api.get('/student-exam/exams/active')
