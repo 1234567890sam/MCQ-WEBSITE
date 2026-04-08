@@ -88,12 +88,18 @@ export default function TakeExam() {
                 setTimeLeft(data.progress.timeLeftSeconds);
                 setWarningCount(data.progress.warningCount || 0);
                 startRef.current = Date.now();
-                // Always init answers from question count to ensure correct length
+                // Build a full-length answers array, then overlay any saved answers on top.
+                // This correctly restores partial progress on rejoin even if the saved array
+                // is shorter than the total question count (student answered only some Qs).
                 const qCount = data.exam?.questions?.length || 0;
-                if (data.progress.answers?.length === qCount) {
-                    setAnswers(data.progress.answers);
+                const blank = Array.from({ length: qCount }, (_, i) => ({ questionIndex: i, selectedOption: null }));
+                if (data.progress.answers?.length > 0) {
+                    // Merge: saved answers override blank slots by questionIndex
+                    const savedMap = {};
+                    data.progress.answers.forEach(a => { savedMap[a.questionIndex] = a; });
+                    setAnswers(blank.map((slot) => savedMap[slot.questionIndex] ?? slot));
                 } else {
-                    setAnswers(Array.from({ length: qCount }, (_, i) => ({ questionIndex: i, selectedOption: null })));
+                    setAnswers(blank);
                 }
             } catch (err) {
                 console.error(err);
