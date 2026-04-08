@@ -299,26 +299,36 @@ const submitExam = async (req, res) => {
         const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
         const passed = percentage >= exam.passingMarks;
 
-        const attempt = await Attempt.create({
-            userId: req.user._id,
-            mode: exam.type || 'exam',
-            collegeId: req.user.collegeId,
-            examSessionId: exam._id,
-            sessionCode: exam.sessionCode,
-            answers: gradedAnswers,
-            score: Math.max(0, score),
-            maxScore,
-            percentage: Math.max(0, percentage),
-            accuracy: correct + wrong > 0 ? (correct / (correct + wrong)) * 100 : 0,
-            passed,
-            totalQuestions: exam.questions.length,
-            correctCount: correct,
-            wrongCount: wrong,
-            skippedCount: skipped,
-            timeTaken: timeTaken || 0,
-            negativeMarking: exam.negativeMarking,
-            autoSubmitted,
-        });
+        // Use upsert so a student always has exactly ONE attempt per exam.
+        // On rejoin + resubmit, this overwrites the old attempt with fresh data
+        // instead of creating a duplicate (which causes duplicate rows in exports).
+        const attempt = await Attempt.findOneAndUpdate(
+            { userId: req.user._id, examSessionId: exam._id },
+            {
+                $set: {
+                    userId: req.user._id,
+                    mode: exam.type || 'exam',
+                    collegeId: req.user.collegeId,
+                    examSessionId: exam._id,
+                    sessionCode: exam.sessionCode,
+                    answers: gradedAnswers,
+                    score: Math.max(0, score),
+                    maxScore,
+                    percentage: Math.max(0, percentage),
+                    accuracy: correct + wrong > 0 ? (correct / (correct + wrong)) * 100 : 0,
+                    passed,
+                    totalQuestions: exam.questions.length,
+                    correctCount: correct,
+                    wrongCount: wrong,
+                    skippedCount: skipped,
+                    timeTaken: timeTaken || 0,
+                    negativeMarking: exam.negativeMarking,
+                    autoSubmitted,
+                    updatedAt: new Date(),
+                }
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
 
         // Mark progress as submitted
         await StudentExamProgress.findOneAndUpdate(

@@ -359,10 +359,21 @@ const getExamResults = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Exam not found or access denied' });
         }
 
-        const results = await Attempt.find({ examSessionId: req.params.id, mode: 'exam', isDeleted: false })
+        const allAttempts = await Attempt.find({ examSessionId: req.params.id, mode: 'exam', isDeleted: false })
             .populate('userId', 'name email studentId semester department')
-            .sort('-score')
+            .sort('-createdAt')
             .lean();
+
+        // Deduplicate: keep only the latest attempt per student (handles legacy duplicates from before upsert fix)
+        const seen = new Set();
+        const results = allAttempts
+            .filter(a => {
+                const uid = a.userId?._id?.toString() || String(a.userId);
+                if (seen.has(uid)) return false;
+                seen.add(uid);
+                return true;
+            })
+            .sort((a, b) => b.score - a.score);
 
         res.json({ success: true, results });
     } catch (e) { res.status(500).json({ success: false, message: 'Server error' }); }
@@ -479,9 +490,19 @@ const exportExamResults = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Exam not found or access denied' });
         }
 
-        const results = await Attempt.find({ examSessionId: req.params.id, mode: 'exam', isDeleted: false })
+        const allAttempts = await Attempt.find({ examSessionId: req.params.id, mode: 'exam', isDeleted: false })
             .populate('userId', 'name email studentId semester department')
+            .sort('-createdAt')
             .lean();
+
+        // Deduplicate: keep only the latest attempt per student
+        const seenExport = new Set();
+        const results = allAttempts.filter(a => {
+            const uid = a.userId?._id?.toString() || String(a.userId);
+            if (seenExport.has(uid)) return false;
+            seenExport.add(uid);
+            return true;
+        });
 
         // Custom sorting for Marksheet format (by Student ID)
         if (format === 'marksheet') {
